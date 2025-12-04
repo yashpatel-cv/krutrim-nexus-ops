@@ -1,0 +1,53 @@
+# Krutrim Nexus Ops - Implementation Plan
+
+## Goal Description
+Create `krutrim-nexus-ops`: A unified, secure-by-default, performance-optimized server orchestration platform. It supports a **Cluster Architecture** where a **Manager** node orchestrates multiple **Worker** nodes to run Web, API, Backend, Mail, Database, and File services. It emphasizes "combined performance" via load balancing and synchronized configurations.
+
+## Architecture Rationale
+
+### 1. Cluster Model (Manager-Worker)
+*   **Manager Node**: The control plane. Holds the "Source of Truth" configs (`services.yml`, [Caddyfile](file:///y:/mega/projects/personal/server_hardening_platform/Caddyfile), etc.). Uses SSH (Ansible-style, agentless) to push configs and commands to Workers.
+*   **Worker Nodes**: Dumb execution units. They run the [install.sh](file:///y:/mega/projects/personal/server_hardening_platform/install.sh) (Worker Mode) to get hardened, then wait for the Manager to schedule workloads.
+*   **Combined Performance**:
+    *   **Load Balancing**: The Manager (or dedicated LB nodes) runs HAProxy/Caddy to distribute traffic across Worker nodes.
+    *   **Service Mesh (Lite)**: Workers communicate over WireGuard (Mesh VPN) for secure internal traffic (DB replication, API calls).
+
+### 2. Extended Service Stack
+*   **Mail**: Postfix (MTA) + Dovecot (IMAP) + Rspamd. Hardened, TLS-only.
+*   **Database**: PostgreSQL (Primary/Replica) + Redis (Cache).
+*   **File/Object**: MinIO (S3 compatible) for app storage.
+*   **Web**: Caddy (Automatic HTTPS) as the Ingress Controller.
+
+### 3. Tooling Changes
+*   **`nexus.py`**: The new CLI tool.
+    *   `nexus sync`: Pushes configs to all nodes.
+    *   `nexus deploy`: Deploys a service to the cluster.
+    *   `nexus status`: Aggregates health checks.
+*   **[install.sh](file:///y:/mega/projects/personal/server_hardening_platform/install.sh)**: Now accepts `--role manager` or `--role worker`.
+
+## Proposed Changes
+
+### Phase 1: Core Refactor
+#### [MODIFY] [install.sh](file:///C:/Users/yashp/.gemini/antigravity/brain/0f403ae0-901e-45c0-8bbe-995bd4ca1d3e/install.sh)
+*   Add `--role` argument.
+*   **Manager**: Installs `nexus.py` and Ansible/Fabric tools.
+*   **Worker**: Installs runtime deps (Python, Docker/Podman if needed, Systemd units).
+
+### Phase 2: Service Modules (Bash Scripts)
+#### [NEW] [setup-mail.sh](file:///C:/Users/yashp/.gemini/antigravity/brain/0f403ae0-901e-45c0-8bbe-995bd4ca1d3e/setup-mail.sh)
+*   Automates Postfix/Dovecot setup with DKIM/SPF/DMARC.
+
+#### [NEW] [setup-db.sh](file:///C:/Users/yashp/.gemini/antigravity/brain/0f403ae0-901e-45c0-8bbe-995bd4ca1d3e/setup-db.sh)
+*   Installs PostgreSQL 16. Configures `listen_addresses` for VPN interface.
+
+### Phase 3: Cluster Manager
+#### [NEW] [nexus.py](file:///C:/Users/yashp/.gemini/antigravity/brain/0f403ae0-901e-45c0-8bbe-995bd4ca1d3e/nexus.py)
+*   Python script using `subprocess` (ssh) to execute commands on remote nodes defined in `inventory.yml`.
+
+#### [NEW] [inventory.yml](file:///C:/Users/yashp/.gemini/antigravity/brain/0f403ae0-901e-45c0-8bbe-995bd4ca1d3e/inventory.yml)
+*   Defines nodes: [manager](file:///C:/Users/yashp/.gemini/antigravity/brain/0f403ae0-901e-45c0-8bbe-995bd4ca1d3e/install.sh#66-85), `worker-1`, `worker-2`, etc.
+
+## Verification Plan
+*   **Cluster Sync**: Run `nexus sync` and verify files appear on worker nodes.
+*   **Load Balancing**: Kill a worker's web service and verify LB fails over.
+*   **Mail**: Send a test email using `swaks`.

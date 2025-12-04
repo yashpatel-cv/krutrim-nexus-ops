@@ -1,0 +1,20 @@
+# /etc/tor/torrc
+
+# Client Only
+ClientOnly 1
+
+# SOCKS Port
+SocksPort 127.0.0.1:9050
+
+# Control Port (Optional, secure it if used)
+# ControlPort 9051
+# CookieAuthentication 1
+
+# Data Directory
+DataDirectory /var/lib/tor
+
+# Logging
+Log notice syslog
+
+# Exclude Exit Nodes (Optional - strict privacy)
+# ExcludeExitNodes {us},{gb},{ca},{au},{nz}

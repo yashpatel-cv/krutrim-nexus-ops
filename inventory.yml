@@ -1,0 +1,7 @@
+manager:
+  - localhost
+
+workers:
+  # Add your worker IPs here
+  # - 192.168.1.101
+  # - 192.168.1.102

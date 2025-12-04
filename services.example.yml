@@ -1,0 +1,18 @@
+services:
+  # Example: Simple Python HTTP Server
+  simple_web:
+    - python3
+    - -m
+    - http.server
+    - "8080"
+
+  # Example: RSS Reader (Miniflux - hypothetical command)
+  # rss_reader:
+  #   - /usr/local/bin/miniflux
+  #   - -config
+  #   - /etc/miniflux.conf
+
+  # Example: Background Worker
+  # worker:
+  #   - python3
+  #   - worker.py

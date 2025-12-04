@@ -1,0 +1,20 @@
+{
+    # Global Options
+    email your-email@example.com
+}
+
+# Default Site
+:80 {
+    # Redirect to HTTPS is automatic in Caddy, but explicit here for clarity
+    redir https://{host}{uri}
+}
+
+# Example Secure Site
+# example.com {
+#     reverse_proxy localhost:8080
+#     header {
+#         Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+#         X-Content-Type-Options "nosniff"
+#         X-Frame-Options "DENY"
+#     }
+# }
