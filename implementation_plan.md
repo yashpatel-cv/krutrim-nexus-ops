@@ -1,46 +1,45 @@
-# Krutrim Nexus Ops - Minimalist Implementation Plan
+# Krutrim Nexus Ops - HA & Monitoring Plan
 
 ## Goal Description
-Build a "suckless" server orchestration platform. Prioritize standard Unix tools, flat text files, and simple shell scripts over complex binaries and databases. Inspired by Luke Smith's `emailwiz` and general philosophy.
+Enhance the platform to support:
+1.  **Web Dashboard**: Visual analytics for all nodes.
+2.  **Decentralization (HA)**: Services survive single-node failures.
+3.  **Interactive Setup**: `install.sh` asks the user for their intent.
 
-## Architecture Rationale
+## Architecture Updates
 
-### 1. The "Suckless" Cluster
-*   **Manager**: Just a machine with SSH keys and a python script (`nexus.py`) that loops over a list of IPs. No "agents" listening on sockets.
-*   **Worker**: Standard Linux box. Services run as systemd units. Configuration is done via `rsync` from the Manager.
-*   **Communication**: SSH for control, WireGuard for internal traffic.
+### 1. Monitoring & Dashboard
+*   **Tool**: **Netdata**. It's lightweight, real-time, and decentralized.
+*   **Implementation**:
+    *   `setup-monitoring.sh`: Installs Netdata on a node.
+    *   **Unified View**: The Manager will host a simple "Nexus Dashboard" (static HTML) that embeds the Netdata charts of all workers, OR we configure Netdata to stream to the Manager.
+    *   *Decision*: Streaming to Manager is cleaner. Manager runs a Netdata parent; Workers run Netdata children.
 
-### 2. Service Stack (Minimalist)
-*   **Mail**: Postfix + Dovecot. Auth via `/etc/passwd` or simple `passwd-file`. No MySQL/Postgres for users.
-*   **Storage**: SFTP for upload, Nginx with `autoindex on` for download/viewing. Simple, fast, works everywhere.
-*   **Web**: Caddy. It's not "suckless" in language (Go), but it's "suckless" in operation (one binary, one config, auto-HTTPS).
-*   **DB**: PostgreSQL. Necessary evil for many apps, but kept default.
+### 2. High Availability (Decentralization)
+*   **Load Balancing**: The `setup-lb.sh` (Caddy) already supports multiple backends. We will explicitly document/script how to add multiple worker IPs for redundancy.
+*   **Service Redundancy**: `nexus deploy` will be updated to easily deploy the same service to multiple nodes.
+*   **Manager Resilience**: The Manager is already decoupled. If it goes down, workers keep running.
+
+### 3. Interactive Installer
+*   **`install.sh`**:
+    *   Check if running interactively.
+    *   Ask: "Install Nexus Manager? (y/n)"
+    *   If yes, proceed with Manager setup.
+    *   If no, ask: "Is this a Worker node? (y/n)" -> If yes, print instructions on how to bootstrap it from the Manager (sticking to the Push model as it's more robust, but acknowledging the user's mental model).
 
 ## Proposed Changes
 
-### Phase 1: Fix & Cleanup
-*   Ensure directory is `krutrim-nexus-ops`.
-*   Simplify `install.sh` to remove unnecessary checks.
+### [MODIFY] `install.sh`
+*   Add `read -p` prompts for role selection.
 
-### Phase 2: Minimalist Scripts
-#### [MODIFY] [setup-mail.sh](file:///C:/Users/yashp/.gemini/antigravity/brain/0f403ae0-901e-45c0-8bbe-995bd4ca1d3e/setup-mail.sh)
-*   Refactor to use `debconf-set-selections` for Postfix (non-interactive) and simple Dovecot config.
-*   Remove SQL dependencies.
+### [NEW] `setup-monitoring.sh`
+*   Installs Netdata.
+*   Configures streaming (Child -> Parent) if it's a worker.
 
-#### [NEW] [setup-storage.sh](file:///C:/Users/yashp/.gemini/antigravity/brain/0f403ae0-901e-45c0-8bbe-995bd4ca1d3e/setup-storage.sh)
-*   Creates a `storage` user.
-*   Configures Nginx to serve `/home/storage/public`.
-*   Restricts SSH to SFTP-only for that user.
+### [MODIFY] `nexus.py`
+*   Add `deploy monitoring` command.
+*   Add `dashboard` command to generate/open the dashboard URL.
 
-#### [NEW] [setup-lb.sh](file:///C:/Users/yashp/.gemini/antigravity/brain/0f403ae0-901e-45c0-8bbe-995bd4ca1d3e/setup-lb.sh)
-*   Installs Caddy.
-*   Configures a simple load balancer block.
-
-### Phase 3: The Nexus
-#### [MODIFY] [nexus.py](file:///C:/Users/yashp/.gemini/antigravity/brain/0f403ae0-901e-45c0-8bbe-995bd4ca1d3e/nexus.py)
-*   Remove `fabric` dependency if possible, or keep it minimal.
-*   Focus on `rsync` (push configs) and `ssh` (reload services).
-
-## Verification
-*   **Mail**: `swaks --to user@example.com --server localhost`
-*   **Storage**: `sftp storage@host` then `curl http://host/file`
+### [MODIFY] `README.md`
+*   Add "High Availability" section.
+*   Add "Monitoring" section.

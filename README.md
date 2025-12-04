@@ -2,119 +2,75 @@
 
 **Minimalist, Push-Based Server Orchestration.**
 
-Krutrim Nexus Ops is a "suckless" style platform for managing a cluster of servers. It uses a **Manager-Worker** architecture where the Manager pushes configuration via SSH, eliminating the need for manual setup on workers.
+Krutrim Nexus Ops is a "suckless" style platform for managing a cluster of servers. It uses a **Manager-Worker** architecture where the Manager pushes configuration via SSH.
 
-## Architecture & Mechanics
+## Features
+*   **Decentralized**: Services run independently on workers.
+*   **Monitoring**: Unified Web Dashboard via Netdata.
+*   **Interactive**: Simple setup script.
+*   **Secure**: Hardened by default.
 
-### How Manager Works
-The **Manager** is a control plane node. It holds the "Source of Truth" (scripts, configs, inventory). It uses the `nexus` CLI (a Python wrapper around `ssh` and `scp`) to:
-1.  **Bootstrap**: Connect to a fresh worker, install dependencies, and apply hardening.
-2.  **Deploy**: Push specific service setup scripts (`setup-mail.sh`, etc.) and execute them.
-3.  **Manage**: Create users, sync configs, and check status.
-
-### How Workers Work
-Workers are "dumb" execution units. They run standard Linux (Debian/Arch).
-*   **Agent**: A lightweight systemd service (`nexus-agent`) that runs `services.py` to supervise application processes.
-*   **Connectivity**: They connect to the internet to download packages (`apt`/`pacman`). They accept incoming SSH connections **only** from the Manager (enforced via SSH keys).
-*   **Services**: Services like Postfix, Caddy, and Postgres run as standard systemd units.
-
-## Quick Start Guide
+## Quick Start
 
 ### 1. Setup Manager
-Run this **once** on your control machine:
+Run the interactive installer on your control node:
 ```bash
 sudo ./install.sh
 ```
-*   Installs `nexus` CLI to `/usr/local/bin`.
-*   Generates SSH keys in `~/.ssh/id_rsa`.
+*Select "1) Manager" when prompted.*
 
-### 2. Define Cluster
+### 2. Connect Workers
 Edit `/opt/nexus/inventory.yml`:
 ```yaml
 workers:
-  - 192.168.1.10  # Worker 1
-  - 192.168.1.11  # Worker 2
+  - 192.168.1.10
+  - 192.168.1.11
 ```
 
-### 3. Bootstrap Workers
+### 3. Bootstrap Cluster
 ```bash
 nexus bootstrap
 ```
-*   Connects to each IP.
-*   Installs firewall (nftables), hardening (sysctl), and dependencies.
-*   **Note**: You must have root SSH access to workers initially (e.g., `ssh-copy-id root@<ip>`).
 
-### 4. Deploy Services
-**Mail Server**:
+### 4. Enable Monitoring (Dashboard)
 ```bash
-nexus deploy mail 192.168.1.10 example.com
+nexus monitor
 ```
-*   Installs Postfix/Dovecot.
-*   Configures TLS and DKIM.
+*   Installs Netdata on Manager and all Workers.
+*   Streams metrics to the Manager.
+*   **Access Dashboard**: `http://<manager-ip>:19999`
 
-**Storage Server**:
-```bash
-nexus deploy storage 192.168.1.11
-```
-*   Sets up SFTP and Nginx.
+### 5. Deploy Services (High Availability)
+To achieve decentralization and HA, deploy the same service to multiple workers and put them behind a Load Balancer.
 
-### 5. Create Users
-**Mail User**:
+**Step A: Deploy App to Multiple Nodes**
 ```bash
-nexus create-user mail 192.168.1.10 john
+nexus deploy web 192.168.1.10
+nexus deploy web 192.168.1.11
 ```
-*   Creates a system user `john`.
-*   Prompts you to set a password.
-*   John can now login via IMAP/SMTP.
 
-**Storage User**:
+**Step B: Configure Load Balancer**
+Deploy the LB to a stable node (or multiple nodes with DNS Round Robin):
 ```bash
-nexus create-user storage 192.168.1.11 alice
+nexus deploy lb 192.168.1.10
 ```
-*   Creates SFTP user `alice`.
-*   Alice can upload files to `/home/alice/public`.
+*Edit `/etc/caddy/Caddyfile` on the LB to include both worker IPs.*
 
 ## Deep Dive Q&A
 
-**Q: How are services connected to the internet?**
-A: Services bind to standard ports on the Worker's public IP:
-*   **Web**: Ports 80 (HTTP) and 443 (HTTPS).
-*   **Mail**: Ports 25 (SMTP), 587 (Submission), 993 (IMAP).
-*   **Storage**: Port 22 (SFTP) and 80/443 (HTTP View).
-*   **Firewall**: `nftables` is configured to allow these ports only if the service is deployed.
+**Q: How do I see analytics?**
+A: Run `nexus monitor`. This sets up a real-time dashboard at `http://<manager-ip>:19999` where you can see CPU, RAM, and Network stats for the entire cluster.
 
-**Q: How do I access them?**
-*   **Web**: Visit `https://<worker-ip>` or domain.
-*   **Mail**: Use a client like Thunderbird.
-    *   **IMAP**: `<worker-ip>`, Port 993, SSL/TLS.
-    *   **SMTP**: `<worker-ip>`, Port 587, STARTTLS.
-    *   **Username**: `john` (created via `nexus create-user`).
-*   **Storage**:
-    *   **Upload**: `sftp alice@<worker-ip>`
-    *   **View**: `http://<worker-ip>/~alice/` (if configured) or root URL.
-
-**Q: Will they be installed/enabled/started automatically?**
-A: **Yes.** The `setup-*.sh` scripts run `apt-get install`, configure the service, and run `systemctl enable --now <service>`.
+**Q: Is it decentralized?**
+A: **Yes.**
+*   **Manager Failure**: If the Manager goes offline, all Workers and Services **continue running**. You just can't push new updates until it's back.
+*   **Worker Failure**: If a Worker goes offline, only the services on that specific worker stop. Use the HA strategy (Load Balancer + Multiple Workers) to prevent downtime.
 
 **Q: Does the script ask questions?**
-A: **No.** The scripts are non-interactive.
-*   `apt-get` runs with `DEBIAN_FRONTEND=noninteractive`.
-*   Postfix is configured via `debconf-set-selections`.
-*   The only interaction is setting a password when you run `nexus create-user`.
+A: **Yes.** `install.sh` is now interactive. It asks you if you want to setup a Manager or Worker, guiding you through the process.
 
-**Q: Is `nexus` a package?**
-A: No, it's a custom Python script installed to `/usr/local/bin/nexus` by `install.sh`. It acts like a CLI tool.
-
-**Q: How do I see emails?**
-A: Since this is a minimalist setup, we don't install a heavy Webmail (like Roundcube) by default. You view emails by connecting a standard Mail Client (Thunderbird, Apple Mail, Outlook) to the server using the credentials you created.
-
-**Q: Can I still SSH in after hardening?**
-A: **Yes.** The `nftables.conf` explicitly allows Port 22. However, root login might be restricted depending on your base OS config. We recommend using SSH keys.
-
-**Q: Do you use static data?**
-A: No hardcoded passwords.
-*   **Passwords**: You set them interactively via `nexus create-user`.
-*   **Keys**: SSH keys are generated on the fly. DKIM keys are generated during mail setup.
-
-**Q: Are necessary packages installed?**
-A: **Yes.** `bootstrap_worker.sh` installs all prerequisites (Python, rsync, WireGuard, etc.) before anything else runs.
+**Q: How do I create users?**
+```bash
+nexus create-user mail 192.168.1.10 john
+nexus create-user storage 192.168.1.11 alice
+```
