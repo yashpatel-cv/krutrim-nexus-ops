@@ -1,0 +1,16 @@
+[Unit]
+Description=Krutrim Nexus Ops Dashboard
+After=network.target consul.service
+Requires=consul.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/nexus/dashboard/backend
+Environment="PATH=/opt/nexus/dashboard/venv/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=/opt/nexus/dashboard/venv/bin/uvicorn app:app --host 0.0.0.0 --port 9000
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>[KRUTRIM]NEXUS-OPS | Distributed Systems Management</title>
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <!-- Header -->
+    <header class="dashboard-header">
+        <div class="header-left">
+            <h1 class="logo">[KRUTRIM]<span class="accent">NEXUS-OPS</span></h1>
+            <p class="subtitle">Distributed Systems Management</p>
+        </div>
+        <div class="header-center">
+            <div class="progress-counter">
+                <span class="label">Active:</span>
+                <span id="active-count" class="count">0/0</span>
+                <span class="label-sub">Workers</span>
+            </div>
+        </div>
+        <div class="header-right">
+            <button class="btn btn-secondary" onclick="refreshDashboard()">
+                <span class="icon">⟳</span> Refresh
+            </button>
+            <button class="btn btn-primary" onclick="toggleRealtime()">
+                <span class="icon">●</span> <span id="realtime-status">Connect</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Filter Bar -->
+    <div class="filter-bar">
+        <div class="filter-group">
+            <span class="filter-label">filter_by_status:</span>
+            <button class="filter-btn active" data-filter="status" data-value="all">ALL</button>
+            <button class="filter-btn" data-filter="status" data-value="healthy">HEALTHY</button>
+            <button class="filter-btn" data-filter="status" data-value="degraded">DEGRADED</button>
+            <button class="filter-btn" data-filter="status" data-value="failed">FAILED</button>
+        </div>
+        <div class="filter-group">
+            <span class="filter-label">filter_by_type:</span>
+            <button class="filter-btn active" data-filter="type" data-value="all">ALL</button>
+            <button class="filter-btn" data-filter="type" data-value="manager">MANAGER</button>
+            <button class="filter-btn" data-filter="type" data-value="worker">WORKER</button>
+            <button class="filter-btn" data-filter="type" data-value="loadbalancer">LOADBALANCER</button>
+        </div>
+    </div>
+
+    <!-- Main Dashboard -->
+    <main class="dashboard-main">
+        <!-- Overview Panel -->
+        <section class="overview-panel">
+            <h2 class="section-title">/cluster/overview</h2>
+            <div class="overview-grid">
+                <div class="overview-card">
+                    <div class="card-header">
+                        <span class="card-icon">▲</span>
+                        <span class="card-title">Managers</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="metric-large" id="managers-count">0</div>
+                        <div class="metric-sub">
+                            <span id="managers-healthy">0</span> healthy / 
+                            <span id="managers-total">0</span> total
+                        </div>
+                    </div>
+                </div>
+
+                <div class="overview-card">
+                    <div class="card-header">
+                        <span class="card-icon">■</span>
+                        <span class="card-title">Workers</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="metric-large" id="workers-count">0</div>
+                        <div class="metric-sub">
+                            <span id="workers-healthy">0</span> healthy / 
+                            <span id="workers-total">0</span> total
+                        </div>
+                    </div>
+                </div>
+
+                <div class="overview-card">
+                    <div class="card-header">
+                        <span class="card-icon">◆</span>
+                        <span class="card-title">Services</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="metric-large" id="services-count">0</div>
+                        <div class="metric-sub">
+                            <span id="services-running">0</span> running / 
+                            <span id="services-total">0</span> total
+                        </div>
+                    </div>
+                </div>
+
+                <div class="overview-card">
+                    <div class="card-header">
+                        <span class="card-icon">●</span>
+                        <span class="card-title">Cluster Health</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="metric-large status-indicator" id="cluster-health">UNKNOWN</div>
+                        <div class="metric-sub" id="cluster-uptime">Uptime: --</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Manager Grid -->
+        <section class="node-section">
+            <h2 class="section-title">/managers</h2>
+            <div id="managers-grid" class="node-grid">
+                <!-- Manager cards will be inserted here -->
+            </div>
+        </section>
+
+        <!-- Worker Grid -->
+        <section class="node-section">
+            <h2 class="section-title">/workers</h2>
+            <div id="workers-grid" class="node-grid">
+                <!-- Worker cards will be inserted here -->
+            </div>
+        </section>
+
+        <!-- Analytics Section -->
+        <section class="analytics-section">
+            <h2 class="section-title">/analytics/performance</h2>
+            <div class="charts-grid">
+                <div class="chart-container">
+                    <h3 class="chart-title">CPU Utilization (24h)</h3>
+                    <canvas id="cpu-chart"></canvas>
+                </div>
+                <div class="chart-container">
+                    <h3 class="chart-title">Memory Usage (24h)</h3>
+                    <canvas id="memory-chart"></canvas>
+                </div>
+                <div class="chart-container">
+                    <h3 class="chart-title">Network Throughput (24h)</h3>
+                    <canvas id="network-chart"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- Logs Terminal -->
+        <section class="logs-section">
+            <h2 class="section-title">/logs/realtime</h2>
+            <div class="terminal">
+                <div class="terminal-header">
+                    <span>System Logs</span>
+                    <button class="btn-small" onclick="clearLogs()">Clear</button>
+                </div>
+                <div id="logs-content" class="terminal-content">
+                    <div class="log-line">[INFO] Dashboard initialized</div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="dashboard-footer">
+        <div class="footer-left">
+            <span>Krutrim Nexus Ops v1.0.0</span>
+            <span class="separator">|</span>
+            <span id="connection-status">Disconnected</span>
+        </div>
+        <div class="footer-right">
+            <span>Last Update: <span id="last-update">--</span></span>
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="/static/js/dashboard.js"></script>
+    <script src="/static/js/realtime.js"></script>
+    <script src="/static/js/charts.js"></script>
+</body>
+</html>

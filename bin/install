@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Krutrim Nexus Ops - Main Installer (Refactored)
+# This is a wrapper that calls the original install.sh with new paths
+
+set -Eeuo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+
+# Source the original install script
+exec "$PROJECT_ROOT/install.sh" "$@"
