@@ -20,14 +20,58 @@ Perfect for cost-effective, resilient infrastructure on a budget.
 - ✅ **Cost-Effective**: Runs on Oracle Always Free (4 OCPU ARM64)
 - ✅ **Simple Setup**: One command installation
 - ✅ **Secure by Default**: Firewall, hardening, SSH keys
+- 🆕 **Web Dashboard**: Real-time monitoring with cyberpunk UI
+- 🆕 **REST API**: Complete API for automation and integration
+
+---
+
+## 🖥️ Manager Dashboard (NEW!)
+
+**Access the beautiful web dashboard at**: `http://64.181.212.50:9000`
+
+### Features
+- 📊 **Real-time Metrics**: CPU, Memory, Disk, Network (5-second updates)
+- 🎯 **Node Management**: View all managers and workers with health status
+- 📈 **Analytics Charts**: 24-hour time-series data visualization
+- 🔍 **Filters**: Filter by status (HEALTHY/DEGRADED/FAILED) and type
+- 🖥️ **Terminal Logs**: Color-coded system logs in real-time
+- 🎨 **Cyberpunk Theme**: Dark UI with neon green accents
+- ⚡ **WebSocket Updates**: Live data without page refresh
+- 🔧 **Actions**: Restart managers/workers directly from UI
+
+**Quick Start**:
+```bash
+# Install dashboard
+cd /opt/krutrim-nexus-ops/dashboard/backend
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+
+# Start dashboard
+uvicorn app:app --host 0.0.0.0 --port 9000
+```
+
+**Documentation**: See [docs/DASHBOARD_GUIDE.md](docs/DASHBOARD_GUIDE.md)
 
 ---
 
 ## 📚 Documentation
 
-- **[Setup Guide](SETUP_GUIDE.md)** - Step-by-step installation for your server
-- **[Architecture](ARCHITECTURE.md)** - Detailed system design and patterns
-- **[Troubleshooting](TROUBLESHOOTING.md)** - Common issues and solutions
+### Getting Started
+- **[Quick Start](QUICK_START.md)** - 5-minute installation guide
+- **[Setup Guide](docs/SETUP_GUIDE.md)** - Comprehensive installation steps
+
+### Dashboard & API
+- **[Dashboard Guide](docs/DASHBOARD_GUIDE.md)** - Web UI user guide
+- **[API Reference](docs/API_REFERENCE.md)** - REST API documentation
+
+### Architecture & Design
+- **[Architecture](docs/ARCHITECTURE.md)** - System design and patterns
+- **[Implementation Summary](docs/IMPLEMENTATION_SUMMARY.md)** - Technical details
+
+### Support
+- **[Troubleshooting](docs/TROUBLESHOOTING.md)** - Common issues and solutions
+- **[File Migration Verification](FILE_MIGRATION_VERIFICATION.md)** - Refactoring audit
 
 ---
 
@@ -122,7 +166,45 @@ http://64.181.212.50:8500
 - **Caddy**: Load balancing with auto-HTTPS and health checks
 - **Workers**: Run application containers via Docker
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed diagrams and flow charts.
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed diagrams and flow charts.
+
+---
+
+## 📁 Repository Structure
+
+```
+krutrim-nexus-ops/
+├── bin/                    # Executable entry points
+│   └── install             # Installer wrapper
+├── lib/                    # Core Python libraries
+│   └── orchestrator/       # Process & worker management
+├── dashboard/              # 🆕 Web Dashboard
+│   ├── backend/            # FastAPI REST API
+│   │   ├── api/            # Endpoints (managers, workers, analytics)
+│   │   ├── models/         # Pydantic data models
+│   │   ├── services/       # Consul & metrics services
+│   │   └── app.py          # Main FastAPI app
+│   └── frontend/           # Cyberpunk UI
+│       ├── css/            # Dark theme styling
+│       ├── js/             # Dashboard logic + WebSocket
+│       └── index.html      # Main dashboard page
+├── config/                 # Configuration files
+│   ├── systemd/            # Service definitions
+│   └── *.conf              # System configs
+├── scripts/                # Service setup scripts
+│   ├── setup-db.sh
+│   ├── setup-lb.sh
+│   ├── setup-mail.sh
+│   └── setup-storage.sh
+├── docs/                   # Documentation
+│   ├── SETUP_GUIDE.md
+│   ├── ARCHITECTURE.md
+│   ├── DASHBOARD_GUIDE.md  # 🆕 Dashboard user guide
+│   └── API_REFERENCE.md    # 🆕 API documentation
+├── tests/                  # Unit tests
+├── examples/               # Example configurations
+└── install.sh              # Main installer
+```
 
 ---
 

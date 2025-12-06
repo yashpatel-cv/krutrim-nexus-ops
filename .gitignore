@@ -1,0 +1,57 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+*.out
+
+# Data
+data/
+*.db
+*.sqlite
+
+# Consul
+/var/consul/
+
+# Temporary
+/tmp/
+*.tmp
+
+# User configs (keep examples)
+inventory.yml
+services.yml
+cluster.yml
+
+# Secrets
+*.key
+*.pem
+*.crt
+id_rsa*
+*.secret
+.env
+
+# Backups
+*.bak
+*.backup
