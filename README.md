@@ -57,75 +57,35 @@ uvicorn app:app --host 0.0.0.0 --port 9000
 
 ## 📚 Documentation
 
-### Getting Started
-- **[Quick Start](QUICK_START.md)** - 5-minute installation guide
-- **[Setup Guide](docs/SETUP_GUIDE.md)** - Comprehensive installation steps
-
-### Dashboard & API
-- **[Dashboard Guide](docs/DASHBOARD_GUIDE.md)** - Web UI user guide
+- **[Setup Guide](docs/SETUP_GUIDE.md)** - Installation (includes quick start)
+- **[Dashboard Guide](docs/DASHBOARD_GUIDE.md)** - Web UI usage
 - **[API Reference](docs/API_REFERENCE.md)** - REST API documentation
-
-### Architecture & Design
 - **[Architecture](docs/ARCHITECTURE.md)** - System design and patterns
-- **[Implementation Summary](docs/IMPLEMENTATION_SUMMARY.md)** - Technical details
-
-### Support
 - **[Troubleshooting](docs/TROUBLESHOOTING.md)** - Common issues and solutions
-- **[Rollback Guide](docs/ROLLBACK.md)** - Emergency rollback procedures
+- **[Changelog](docs/CHANGELOG.md)** - Version history
+- **[Rollback Guide](docs/ROLLBACK.md)** - Emergency procedures
 
 ---
 
-## 🚀 Quick Start (5 Minutes)
+## 🚀 Getting Started
 
-### Your Server Details
-- **IP**: 64.181.212.50
-- **Domain**: krutrimseva.cbu.net
-- **Platform**: Oracle Cloud (ARM64/AMD64)
+**Quick Installation**: See [Setup Guide](docs/SETUP_GUIDE.md) for 5-minute installation.
 
-### Installation
+**Your Server**: 64.181.212.50 | krutrimseva.cbu.net | Oracle Cloud ARM64
 
-1. **SSH into your server**:
 ```bash
-ssh root@64.181.212.50
-```
-
-2. **Clone repository**:
-```bash
+# Clone and install
 cd /opt
-git clone https://github.com/yourusername/krutrim-nexus-ops.git
+git clone https://github.com/yashpatel-cv/krutrim-nexus-ops.git
 cd krutrim-nexus-ops
-```
-
-3. **Run installer**:
-```bash
-chmod +x install.sh
 sudo ./install.sh
+# Select option 3 (Manager + Worker)
+
+# Access dashboard
+http://64.181.212.50:9000
 ```
 
-4. **Select deployment mode**:
-```
-Select deployment mode:
-  1) Manager Only
-  2) Worker Only
-  3) Both (Manager + Worker) ← Choose this for Oracle
-  4) Load Balancer
-
-Select [1/2/3/4]: 3
-```
-
-5. **Verify installation**:
-```bash
-consul members
-systemctl status nexus-orchestrator
-systemctl status nexus-worker
-```
-
-6. **Access Consul UI**:
-```
-http://64.181.212.50:8500
-```
-
-**That's it!** Your HA cluster is running. 🎉
+For detailed instructions, see **[Setup Guide](docs/SETUP_GUIDE.md)**.
 
 ---
 

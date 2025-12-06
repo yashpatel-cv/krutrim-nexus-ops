@@ -1,6 +1,47 @@
-# Krutrim Nexus Ops - High Availability Setup Guide
+# Krutrim Nexus Ops - Setup Guide
 
-## Architecture Overview
+## Quick Start (5 Minutes)
+
+For your Oracle instance (64.181.212.50):
+
+```bash
+# 1. SSH and clone
+ssh root@64.181.212.50
+cd /opt
+git clone https://github.com/yashpatel-cv/krutrim-nexus-ops.git
+cd krutrim-nexus-ops
+
+# 2. Run installer
+chmod +x install.sh
+sudo ./install.sh
+# Select option 3 (Manager + Worker)
+
+# 3. Install dashboard
+cd dashboard/backend
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+
+# 4. Start dashboard service
+sudo cp ../../config/systemd/nexus-dashboard.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable nexus-dashboard
+sudo systemctl start nexus-dashboard
+
+# 5. Open firewall
+sudo ufw allow 9000/tcp
+
+# 6. Access dashboard
+# Open http://64.181.212.50:9000
+```
+
+**Done!** Your cluster is running with web dashboard.
+
+---
+
+## Detailed Setup Guide
+
+### Architecture Overview
 
 Your system uses a **Manager-Worker High Availability Pattern** with:
 - **Service Discovery**: Consul for automatic node registration and health monitoring
