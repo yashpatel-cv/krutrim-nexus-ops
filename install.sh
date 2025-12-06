@@ -283,7 +283,13 @@ setup_manager() {
         [ -f "$f" ] && cp "$f" "$NEXUS_HOME/" || warn "$f not found, skipping"
     done
     
-    for f in *.conf setup-*.sh; do
+    # Copy config files
+    for f in config/*.conf config/*.service config/torrc; do
+        [ -f "$f" ] && cp "$f" "$NEXUS_HOME/" || true
+    done
+    
+    # Copy setup scripts
+    for f in scripts/setup-*.sh; do
         [ -f "$f" ] && cp "$f" "$NEXUS_HOME/" || true
     done
 
@@ -458,7 +464,19 @@ setup_both() {
     pip3 install pyyaml docker python-consul
     
     mkdir -p "$NEXUS_HOME"
-    for f in *; do
+    
+    # Copy core files
+    for f in nexus.py inventory.yml services.yml bootstrap_worker.sh run-services.sh services.py proc_ipc.py; do
+        [ -f "$f" ] && cp "$f" "$NEXUS_HOME/" || warn "$f not found"
+    done
+    
+    # Copy config files
+    for f in config/*.conf config/*.service config/torrc; do
+        [ -f "$f" ] && cp "$f" "$NEXUS_HOME/" || true
+    done
+    
+    # Copy setup scripts
+    for f in scripts/setup-*.sh; do
         [ -f "$f" ] && cp "$f" "$NEXUS_HOME/" || true
     done
     

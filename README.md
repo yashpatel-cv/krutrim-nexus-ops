@@ -71,7 +71,7 @@ uvicorn app:app --host 0.0.0.0 --port 9000
 
 ### Support
 - **[Troubleshooting](docs/TROUBLESHOOTING.md)** - Common issues and solutions
-- **[File Migration Verification](FILE_MIGRATION_VERIFICATION.md)** - Refactoring audit
+- **[Rollback Guide](docs/ROLLBACK.md)** - Emergency rollback procedures
 
 ---
 
