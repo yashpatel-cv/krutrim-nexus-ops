@@ -449,6 +449,14 @@ body {
     background-color: var(--bg-secondary);
     border: 1px solid var(--border-color);
     padding: var(--spacing-lg);
+    height: 300px;
+    display: flex;
+    flex-direction: column;
+}
+
+.chart-container canvas {
+    flex: 1;
+    max-height: 250px;
 }
 
 .chart-title {
