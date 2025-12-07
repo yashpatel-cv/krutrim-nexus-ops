@@ -52,8 +52,11 @@ fi
 echo "Creating fresh virtual environment..."
 python3 -m venv venv
 source venv/bin/activate
+echo "Upgrading pip, setuptools, wheel..."
 pip install --upgrade pip setuptools wheel -q
-pip install -r requirements.txt -q
+echo "Installing dashboard dependencies (this may take a minute)..."
+pip install -r requirements.txt -q --no-cache-dir
+echo "✓ Dependencies installed"
 deactivate
 
 # Restart dashboard service
