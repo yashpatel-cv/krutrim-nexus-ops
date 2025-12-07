@@ -897,8 +897,13 @@ setup_loadbalancer() {
     admin off
 }
 
-# Main dashboard over HTTPS (automatic Let's Encrypt via Caddy)
+# Root domain - redirect to manager subdomain
 ${DOMAIN} {
+    redir https://manager.${DOMAIN}{uri} permanent
+}
+
+# Manager dashboard over HTTPS (automatic Let's Encrypt via Caddy)
+manager.${DOMAIN} {
     reverse_proxy 127.0.0.1:9000
 
     # Security headers
@@ -918,6 +923,12 @@ ${DOMAIN} {
 # Consul UI on a subdomain
 consul.${DOMAIN} {
     reverse_proxy 127.0.0.1:8500
+    
+    # Security headers
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+    }
 }
 EOF
 
@@ -926,7 +937,8 @@ EOF
     
     log "Load Balancer configured!"
     echo -e "${GREEN}Access points:${NC}"
-    echo "  - Main site: https://${DOMAIN}"
+    echo "  - Root domain: https://${DOMAIN} (redirects to manager)"
+    echo "  - Manager Dashboard: https://manager.${DOMAIN}"
     echo "  - Consul UI: https://consul.${DOMAIN}"
 }
 
