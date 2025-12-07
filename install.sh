@@ -73,9 +73,12 @@ install_base_deps() {
     log "Installing base dependencies..."
     if [ -f /etc/debian_version ]; then
         export DEBIAN_FRONTEND=noninteractive
-        apt-get update -y
-        apt-get install -y curl wget unzip jq git python3 python3-pip python3-yaml python3-docker \
-            openssh-server rsync net-tools htop vim docker.io docker-compose
+        log "Updating package lists..."
+        apt-get update -y -qq > /dev/null 2>&1
+        log "Installing system packages (this may take a few minutes)..."
+        apt-get install -y -qq curl wget unzip jq git python3 python3-pip python3-yaml python3-docker \
+            openssh-server rsync net-tools htop vim docker.io docker-compose > /dev/null 2>&1
+        echo -e "${GREEN}✓ System packages installed${NC}"
     elif [ -f /etc/arch-release ]; then
         pacman -Sy --noconfirm curl wget unzip jq git python python-pip python-yaml \
             openssh rsync net-tools htop vim docker docker-compose
@@ -286,7 +289,7 @@ install_dashboard() {
     
     # Install Python virtual environment package
     if [ -f /etc/debian_version ]; then
-        apt-get install -y python3-venv python3-full
+        apt-get install -y -qq python3-venv python3-full > /dev/null 2>&1
     fi
     
     cd "$backend_path"
@@ -309,20 +312,22 @@ install_dashboard() {
     log "Installing dashboard dependencies (this may take a few minutes)..."
     source venv/bin/activate
     
-    # Upgrade pip first
-    pip install --upgrade pip setuptools wheel
+    # Upgrade pip first (quietly)
+    log "Upgrading pip, setuptools, wheel..."
+    pip install --upgrade pip setuptools wheel -q
     
     # Install requirements with retry logic
     local max_attempts=3
     local attempt=1
     while [ $attempt -le $max_attempts ]; do
-        log "Installation attempt $attempt of $max_attempts..."
-        if pip install -r requirements.txt; then
-            log "Dependencies installed successfully"
+        log "Installing dashboard dependencies (attempt $attempt/$max_attempts)..."
+        if pip install -r requirements.txt -q --no-cache-dir 2>&1 | grep -E "(Successfully installed|ERROR|error)" || [ ${PIPESTATUS[0]} -eq 0 ]; then
+            echo -e "${GREEN}✓ Dependencies installed successfully${NC}"
             break
         else
             if [ $attempt -eq $max_attempts ]; then
                 error "Failed to install dependencies after $max_attempts attempts"
+                echo "Run manually: cd dashboard/backend && source venv/bin/activate && pip install -r requirements.txt"
                 deactivate
                 cd - > /dev/null
                 return 1
