@@ -54,27 +54,37 @@ fi
 echo "Domain (detected): ${DETECTED_DOMAIN}"
 echo ""
 
-# Ask user for public IP/bind address
-echo -e "${YELLOW}Server IP Configuration:${NC}"
+# Smart IP configuration for cloud instances
+echo -e "${YELLOW}Network Configuration:${NC}"
 if [ -n "$PUBLIC_IP" ] && [ "$PUBLIC_IP" != "$PRIVATE_IP" ]; then
-    echo "Detected Public IP: ${PUBLIC_IP}"
-    echo "Detected Private IP: ${PRIVATE_IP}"
+    # Cloud instance detected (public IP differs from private IP)
+    echo -e "${GREEN}✓ Cloud instance detected (Oracle, AWS, GCP, Azure)${NC}"
     echo ""
-    echo "For cloud instances (Oracle, AWS, etc), use your PUBLIC IP for Consul bind_addr."
-    read -p "Enter server IP to use (press Enter for public IP ${PUBLIC_IP}): " USER_IP
-    if [ -z "$USER_IP" ]; then
-        BIND_IP="$PUBLIC_IP"
-    else
-        BIND_IP="$USER_IP"
-    fi
+    echo "Your instance has:"
+    echo "  - Private IP: ${PRIVATE_IP} (bound to network interface)"
+    echo "  - Public IP:  ${PUBLIC_IP} (NAT'd by cloud provider)"
+    echo ""
+    echo -e "${YELLOW}IMPORTANT: Consul must bind to PRIVATE IP, not public IP!${NC}"
+    echo "  bind_addr:      ${PRIVATE_IP}  (what Consul binds to)"
+    echo "  advertise_addr: ${PUBLIC_IP}   (what Consul advertises)"
+    echo ""
+    read -p "Press Enter to use PRIVATE IP (${PRIVATE_IP}) for Consul [recommended]: " USER_CONFIRM
+    
+    # Always use private IP for bind, public for advertise in cloud
+    BIND_IP="$PRIVATE_IP"
+    ADVERTISE_IP="$PUBLIC_IP"
+    echo -e "${GREEN}✓ Using private IP for bind_addr: ${BIND_IP}${NC}"
+    echo -e "${GREEN}✓ Using public IP for advertise_addr: ${ADVERTISE_IP}${NC}"
 else
-    echo "Detected IP: ${PRIVATE_IP}"
-    read -p "Enter server IP (press Enter for ${PRIVATE_IP}, or input custom): " USER_IP
+    # Non-cloud or single IP instance
+    echo "Single IP detected: ${PRIVATE_IP}"
+    read -p "Enter server IP (press Enter for ${PRIVATE_IP}): " USER_IP
     if [ -z "$USER_IP" ]; then
         BIND_IP="$PRIVATE_IP"
     else
         BIND_IP="$USER_IP"
     fi
+    ADVERTISE_IP="$BIND_IP"
 fi
 
 # Validate IP was provided
@@ -93,8 +103,11 @@ else
     DOMAIN="$USER_DOMAIN"
 fi
 
-# Store as SERVER_IP for compatibility
+# Store for compatibility
 SERVER_IP="$BIND_IP"
+if [ -z "$ADVERTISE_IP" ]; then
+    ADVERTISE_IP="$BIND_IP"
+fi
 
 echo -e "${BLUE}"
 cat << 'EOF'
@@ -124,13 +137,18 @@ echo "  Architecture: ${ARCH_LABEL} (${ARCH})"
 echo "  OS: $([ -f /etc/debian_version ] && echo 'Debian/Ubuntu' || [ -f /etc/oracle-release ] && echo 'Oracle Linux' || echo 'Other')"
 echo ""
 echo -e "${BLUE}Network:${NC}"
-echo "  Server IP (bind_addr): ${BIND_IP}"
+if [ "$BIND_IP" != "$ADVERTISE_IP" ]; then
+    echo "  Bind IP (Consul binds to):      ${BIND_IP}"
+    echo "  Advertise IP (Consul advertises): ${ADVERTISE_IP}"
+else
+    echo "  Server IP: ${BIND_IP}"
+fi
 echo "  Domain: ${DOMAIN}"
 if [ -n "$PUBLIC_IP" ] && [ "$PUBLIC_IP" != "$BIND_IP" ]; then
-    echo "  Public IP (for reference): ${PUBLIC_IP}"
+    echo "  Public IP (detected): ${PUBLIC_IP}"
 fi
 if [ -n "$PRIVATE_IP" ] && [ "$PRIVATE_IP" != "$BIND_IP" ]; then
-    echo "  Private IP (for reference): ${PRIVATE_IP}"
+    echo "  Private IP (detected): ${PRIVATE_IP}"
 fi
 echo ""
 echo -e "${BLUE}Installation:${NC}"
@@ -326,15 +344,15 @@ install_consul() {
     mkdir -p /etc/consul.d /var/consul
     
     if [ "$mode" == "server" ]; then
-        log "Configuring Consul server with bind_addr=$BIND_IP"
-        cat > /etc/consul.d/server.json <<EOF
+        log "Configuring Consul server with bind_addr=$BIND_IP, advertise_addr=$ADVERTISE_IP"
+        cat > /etc/consul.d/consul.json <<EOF
 {
   "server": true,
   "bootstrap_expect": 1,
   "data_dir": "/var/consul",
   "datacenter": "krutrim-dc1",
   "bind_addr": "$BIND_IP",
-  "advertise_addr": "$BIND_IP",
+  "advertise_addr": "$ADVERTISE_IP",
   "client_addr": "0.0.0.0",
   "ui_config": {
     "enabled": true
@@ -345,14 +363,14 @@ install_consul() {
 EOF
     else
         read -p "Enter Manager IP for Consul cluster: " manager_ip
-        log "Configuring Consul client with bind_addr=$BIND_IP, joining $manager_ip"
+        log "Configuring Consul client with bind_addr=$BIND_IP, advertise_addr=$ADVERTISE_IP, joining $manager_ip"
         cat > /etc/consul.d/client.json <<EOF
 {
   "server": false,
   "data_dir": "/var/consul",
   "datacenter": "krutrim-dc1",
   "bind_addr": "$BIND_IP",
-  "advertise_addr": "$BIND_IP",
+  "advertise_addr": "$ADVERTISE_IP",
   "client_addr": "0.0.0.0",
   "retry_join": ["$manager_ip"],
   "log_level": "INFO",
