@@ -133,21 +133,6 @@ manager = ConnectionManager()
 
 @app.get("/")
 async def root():
-    """Serve the dashboard frontend"""
-    try:
-        index_path = frontend_path / "index.html"
-        if index_path.exists():
-            return FileResponse(index_path)
-        else:
-            logger.warning("index.html not found, returning API info")
-            return {
-                "message": settings.app_name,
-                "version": settings.app_version,
-                "docs": "/api/docs" if settings.debug else "API documentation disabled"
-            }
-    except Exception as e:
-        logger.error(f"Error serving root: {e}")
-        return {"message": settings.app_name, "status": "error"}
 
 
 @app.websocket("/ws/realtime")
