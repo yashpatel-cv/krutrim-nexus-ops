@@ -26,7 +26,7 @@ err() { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
 echo -e "${BLUE}"
 cat << 'EOF'
 ╔══════════════════════════════════════════════╗
-║   Krutrim Nexus Ops - HA Installation       ║
+║   Krutrim Nexus Ops - HA Installation        ║
 ║   Manager-Worker High Availability Pattern   ║
 ╚══════════════════════════════════════════════╝
 EOF
@@ -94,16 +94,20 @@ install_consul() {
     local mode="$1"  # client or server
     log "Installing Consul ($mode mode)..."
     
+    local already_installed=false
     if command -v consul &>/dev/null; then
         log "Consul already installed: $(consul version | head -1)"
-        return
+        already_installed=true
     fi
     
-    cd /tmp
-    wget -q "https://releases.hashicorp.com/consul/${CONSUL_VERSION}/consul_${CONSUL_VERSION}_linux_${CONSUL_ARCH}.zip"
-    unzip -q consul_${CONSUL_VERSION}_linux_${CONSUL_ARCH}.zip
-    mv consul /usr/local/bin/
-    chmod +x /usr/local/bin/consul
+    # Only download and install if not already installed
+    if [ "$already_installed" = false ]; then
+        cd /tmp
+        wget -q "https://releases.hashicorp.com/consul/${CONSUL_VERSION}/consul_${CONSUL_VERSION}_linux_${CONSUL_ARCH}.zip"
+        unzip -q consul_${CONSUL_VERSION}_linux_${CONSUL_ARCH}.zip
+        mv consul /usr/local/bin/
+        chmod +x /usr/local/bin/consul
+    fi
     
     mkdir -p /etc/consul.d /var/consul
     
@@ -156,23 +160,35 @@ LimitNOFILE=65536
 WantedBy=multi-user.target
 EOF
     
-    systemctl daemon-reload
-    systemctl enable consul
-    systemctl start consul
+    # Ensure service file exists and is configured
+    if [ "$already_installed" = false ]; then
+        systemctl daemon-reload
+    fi
     
-    # Wait for Consul to be ready
-    log "Waiting for Consul to start..."
-    local max_wait=30
-    local waited=0
-    while ! systemctl is-active --quiet consul 2>/dev/null; do
-        if [ $waited -ge $max_wait ]; then
-            error "Consul failed to start after ${max_wait}s"
-            journalctl -u consul -n 20
-            return 1
-        fi
-        sleep 1
-        waited=$((waited + 1))
-    done
+    # Always ensure service is enabled and running
+    systemctl enable consul 2>/dev/null || true
+    
+    # Check if already running
+    if systemctl is-active --quiet consul 2>/dev/null; then
+        log "Consul service already running"
+    else
+        log "Starting Consul service..."
+        systemctl start consul
+        
+        # Wait for Consul to be ready
+        log "Waiting for Consul to start..."
+        local max_wait=30
+        local waited=0
+        while ! systemctl is-active --quiet consul 2>/dev/null; do
+            if [ $waited -ge $max_wait ]; then
+                error "Consul failed to start after ${max_wait}s"
+                journalctl -u consul -n 20
+                return 1
+            fi
+            sleep 1
+            waited=$((waited + 1))
+        done
+    fi
     
     # Additional wait for Consul to be fully ready
     sleep 2
@@ -709,10 +725,17 @@ validate_installation() {
     if systemctl is-active --quiet consul 2>/dev/null; then
         echo -e "${GREEN}✓ Running${NC}"
     else
-        echo -e "${RED}✗ NOT RUNNING${NC}"
-        echo -e "${RED}  ERROR: Consul service failed to start!${NC}"
-        echo -e "${YELLOW}  Fix: systemctl status consul${NC}"
-        has_errors=true
+        echo -e "${YELLOW}✗ NOT RUNNING (attempting to fix)${NC}"
+        echo "  Restarting Consul..."
+        systemctl restart consul
+        sleep 3
+        if systemctl is-active --quiet consul 2>/dev/null; then
+            echo -e "${GREEN}  ✓ Consul restarted successfully${NC}"
+        else
+            echo -e "${RED}  ✗ ERROR: Consul failed to start!${NC}"
+            echo -e "${YELLOW}  Check logs: journalctl -u consul -n 50${NC}"
+            has_errors=true
+        fi
     fi
     
     # Check Orchestrator (if manager or both)
@@ -721,10 +744,17 @@ validate_installation() {
         if systemctl is-active --quiet nexus-orchestrator 2>/dev/null; then
             echo -e "${GREEN}✓ Running${NC}"
         else
-            echo -e "${RED}✗ NOT RUNNING${NC}"
-            echo -e "${RED}  ERROR: Orchestrator service failed to start!${NC}"
-            echo -e "${YELLOW}  Fix: systemctl status nexus-orchestrator${NC}"
-            has_errors=true
+            echo -e "${YELLOW}✗ NOT RUNNING (attempting to fix)${NC}"
+            echo "  Restarting Orchestrator..."
+            systemctl restart nexus-orchestrator
+            sleep 2
+            if systemctl is-active --quiet nexus-orchestrator 2>/dev/null; then
+                echo -e "${GREEN}  ✓ Orchestrator restarted successfully${NC}"
+            else
+                echo -e "${RED}  ✗ ERROR: Orchestrator failed to start!${NC}"
+                echo -e "${YELLOW}  Check logs: journalctl -u nexus-orchestrator -n 50${NC}"
+                has_errors=true
+            fi
         fi
     fi
     
@@ -734,10 +764,17 @@ validate_installation() {
         if systemctl is-active --quiet nexus-worker 2>/dev/null; then
             echo -e "${GREEN}✓ Running${NC}"
         else
-            echo -e "${RED}✗ NOT RUNNING${NC}"
-            echo -e "${RED}  ERROR: Worker service failed to start!${NC}"
-            echo -e "${YELLOW}  Fix: systemctl status nexus-worker${NC}"
-            has_errors=true
+            echo -e "${YELLOW}✗ NOT RUNNING (attempting to fix)${NC}"
+            echo "  Restarting Worker..."
+            systemctl restart nexus-worker
+            sleep 2
+            if systemctl is-active --quiet nexus-worker 2>/dev/null; then
+                echo -e "${GREEN}  ✓ Worker restarted successfully${NC}"
+            else
+                echo -e "${RED}  ✗ ERROR: Worker failed to start!${NC}"
+                echo -e "${YELLOW}  Check logs: journalctl -u nexus-worker -n 50${NC}"
+                has_errors=true
+            fi
         fi
     fi
     
@@ -748,10 +785,18 @@ validate_installation() {
             echo -e "${GREEN}✓ Running${NC}"
             echo -e "${GREEN}  Access at: http://$SERVER_IP:9000${NC}"
         else
-            echo -e "${RED}✗ NOT RUNNING${NC}"
-            echo -e "${RED}  ERROR: Dashboard service failed to start!${NC}"
-            echo -e "${YELLOW}  Fix: journalctl -u nexus-dashboard -n 50${NC}"
-            has_errors=true
+            echo -e "${YELLOW}✗ NOT RUNNING (attempting to fix)${NC}"
+            echo "  Restarting Dashboard..."
+            systemctl restart nexus-dashboard
+            sleep 2
+            if systemctl is-active --quiet nexus-dashboard 2>/dev/null; then
+                echo -e "${GREEN}  ✓ Dashboard restarted successfully${NC}"
+                echo -e "${GREEN}  Access at: http://$SERVER_IP:9000${NC}"
+            else
+                echo -e "${RED}  ✗ ERROR: Dashboard failed to start!${NC}"
+                echo -e "${YELLOW}  Check logs: journalctl -u nexus-dashboard -n 50${NC}"
+                has_errors=true
+            fi
         fi
     fi
     
@@ -760,10 +805,23 @@ validate_installation() {
     if consul members &>/dev/null; then
         echo -e "${GREEN}✓ Connected${NC}"
     else
-        echo -e "${RED}✗ FAILED${NC}"
-        echo -e "${RED}  ERROR: Cannot connect to Consul!${NC}"
-        echo -e "${YELLOW}  Fix: systemctl restart consul${NC}"
-        has_errors=true
+        echo -e "${YELLOW}✗ FAILED (waiting for Consul)${NC}"
+        echo "  Waiting for Consul to be ready..."
+        local max_wait=10
+        local waited=0
+        while ! consul members &>/dev/null; do
+            if [ $waited -ge $max_wait ]; then
+                echo -e "${RED}  ✗ ERROR: Cannot connect to Consul!${NC}"
+                echo -e "${YELLOW}  Check status: systemctl status consul${NC}"
+                has_errors=true
+                break
+            fi
+            sleep 1
+            waited=$((waited + 1))
+        done
+        if consul members &>/dev/null; then
+            echo -e "${GREEN}  ✓ Consul connectivity established${NC}"
+        fi
     fi
     
     # Check Docker
