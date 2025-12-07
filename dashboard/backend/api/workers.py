@@ -6,8 +6,8 @@ from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import List, Optional
 import logging
 
-from ..models import Worker, WorkerStatus, WorkerPool, ServiceInfo
-from ..services import ConsulService, MetricsService
+from models import Worker, WorkerStatus, WorkerPool, ServiceInfo
+from services import ConsulService, MetricsService
 
 router = APIRouter(prefix="/api/workers", tags=["workers"])
 logger = logging.getLogger(__name__)

@@ -13,8 +13,8 @@ import json
 from pathlib import Path
 from typing import List
 
-from .api import managers_router, workers_router, analytics_router, health_router
-from .services import ConsulService, MetricsService
+from api import managers_router, workers_router, analytics_router, health_router
+from services import ConsulService, MetricsService
 
 # Configure logging
 logging.basicConfig(

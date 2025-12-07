@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends
 import logging
 from datetime import datetime
 
-from ..services import ConsulService
+from services import ConsulService
 
 router = APIRouter(prefix="/api/health", tags=["health"])
 logger = logging.getLogger(__name__)

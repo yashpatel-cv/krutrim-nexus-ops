@@ -6,8 +6,8 @@ from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import List
 import logging
 
-from ..models import Metrics, SystemMetrics, TimeSeriesDataPoint
-from ..services import ConsulService, MetricsService
+from models import Metrics, SystemMetrics, TimeSeriesDataPoint
+from services import ConsulService, MetricsService
 
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 logger = logging.getLogger(__name__)

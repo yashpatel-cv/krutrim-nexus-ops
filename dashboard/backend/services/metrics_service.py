@@ -8,7 +8,7 @@ from typing import Dict, List, Optional
 from datetime import datetime, timedelta
 from collections import deque
 
-from ..models import SystemMetrics, ServiceMetrics, TimeSeriesDataPoint
+from models import SystemMetrics, ServiceMetrics, TimeSeriesDataPoint
 
 logger = logging.getLogger(__name__)
 
