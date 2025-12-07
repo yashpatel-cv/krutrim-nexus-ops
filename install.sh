@@ -89,10 +89,39 @@ install_base_deps() {
     log "Base dependencies installed"
 }
 
+# --- Consul Cleanup ---
+cleanup_consul() {
+    log "Cleaning up any existing Consul processes..."
+    
+    # Stop any running Consul service
+    systemctl stop consul 2>/dev/null || true
+    
+    # Kill any stray Consul processes
+    pkill -9 consul 2>/dev/null || true
+    sleep 1
+    
+    # Reset systemd failure state
+    systemctl reset-failed consul 2>/dev/null || true
+    
+    # Clean up data directory (preserve config)
+    if [ -d "/var/consul" ]; then
+        log "Cleaning Consul data directory..."
+        rm -rf /var/consul/*
+    fi
+    
+    # Remove any lock files
+    rm -f /var/consul/.lock 2>/dev/null || true
+    
+    log "Consul cleanup complete"
+}
+
 # --- Service Discovery (Consul) ---
 install_consul() {
     local mode="$1"  # client or server
     log "Installing Consul ($mode mode)..."
+    
+    # Clean up any previous failed Consul installations
+    cleanup_consul
     
     local already_installed=false
     if command -v consul &>/dev/null; then
@@ -166,6 +195,7 @@ EOF
     fi
     
     # Always ensure service is enabled and running
+    systemctl daemon-reload
     systemctl enable consul 2>/dev/null || true
     
     # Check if already running
@@ -173,7 +203,17 @@ EOF
         log "Consul service already running"
     else
         log "Starting Consul service..."
-        systemctl start consul
+        
+        # Start Consul and capture any immediate errors
+        if ! systemctl start consul 2>&1 | tee /tmp/consul_start.log; then
+            error "Failed to start Consul service"
+            echo "Recent Consul logs:"
+            journalctl -u consul -n 30 --no-pager
+            echo ""
+            echo "Consul config:"
+            cat /etc/consul.d/*.json 2>/dev/null || true
+            return 1
+        fi
         
         # Wait for Consul to be ready
         log "Waiting for Consul to start..."
@@ -182,9 +222,24 @@ EOF
         while ! systemctl is-active --quiet consul 2>/dev/null; do
             if [ $waited -ge $max_wait ]; then
                 error "Consul failed to start after ${max_wait}s"
-                journalctl -u consul -n 20
+                echo "Consul service status:"
+                systemctl status consul --no-pager -l || true
+                echo ""
+                echo "Recent Consul logs:"
+                journalctl -u consul -n 50 --no-pager
+                echo ""
+                echo "Checking for port conflicts:"
+                netstat -tuln | grep -E ':(8500|8600|8301|8302)' || echo "No conflicts found"
                 return 1
             fi
+            
+            # Check if service failed during startup
+            if systemctl is-failed --quiet consul 2>/dev/null; then
+                error "Consul service failed during startup"
+                journalctl -u consul -n 30 --no-pager
+                return 1
+            fi
+            
             sleep 1
             waited=$((waited + 1))
         done
