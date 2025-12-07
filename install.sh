@@ -927,7 +927,7 @@ EOF
     log "Load Balancer configured!"
     echo -e "${GREEN}Access points:${NC}"
     echo "  - Main site: https://${DOMAIN}"
-    echo "  - Consul UI: http://${SERVER_IP}:8500"
+    echo "  - Consul UI: https://consul.${DOMAIN}"
 }
 
 # --- Both (Manager + Worker) Setup ---
