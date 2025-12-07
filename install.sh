@@ -278,21 +278,69 @@ install_dashboard() {
         return 1
     fi
     
+    # Stop existing service if running (for re-installation)
+    if systemctl is-active --quiet nexus-dashboard 2>/dev/null; then
+        log "Stopping existing dashboard service..."
+        systemctl stop nexus-dashboard
+    fi
+    
     # Install Python virtual environment package
     if [ -f /etc/debian_version ]; then
         apt-get install -y python3-venv python3-full
     fi
     
-    # Create virtual environment
     cd "$backend_path"
-    log "Creating Python virtual environment..."
-    python3 -m venv venv
     
-    # Install dependencies
-    log "Installing dashboard dependencies..."
+    # Remove broken/old venv if it exists
+    if [ -d "venv" ]; then
+        log "Removing old virtual environment..."
+        rm -rf venv
+    fi
+    
+    # Create fresh virtual environment
+    log "Creating Python virtual environment..."
+    python3 -m venv venv || {
+        error "Failed to create virtual environment"
+        cd - > /dev/null
+        return 1
+    }
+    
+    # Install dependencies with error handling
+    log "Installing dashboard dependencies (this may take a few minutes)..."
     source venv/bin/activate
-    pip install -r requirements.txt
+    
+    # Upgrade pip first
+    pip install --upgrade pip setuptools wheel
+    
+    # Install requirements with retry logic
+    local max_attempts=3
+    local attempt=1
+    while [ $attempt -le $max_attempts ]; do
+        log "Installation attempt $attempt of $max_attempts..."
+        if pip install -r requirements.txt; then
+            log "Dependencies installed successfully"
+            break
+        else
+            if [ $attempt -eq $max_attempts ]; then
+                error "Failed to install dependencies after $max_attempts attempts"
+                deactivate
+                cd - > /dev/null
+                return 1
+            fi
+            warn "Installation failed, retrying in 5 seconds..."
+            sleep 5
+            attempt=$((attempt + 1))
+        fi
+    done
+    
     deactivate
+    
+    # Verify critical files exist
+    if [ ! -f "app.py" ]; then
+        error "app.py not found in $backend_path"
+        cd - > /dev/null
+        return 1
+    fi
     
     # Install systemd service
     log "Installing dashboard service..."
@@ -329,14 +377,24 @@ EOF
     systemctl enable nexus-dashboard
     systemctl start nexus-dashboard
     
+    # Wait a moment and check if service started successfully
+    sleep 2
+    if systemctl is-active --quiet nexus-dashboard; then
+        log "Dashboard service started successfully"
+    else
+        warn "Dashboard service may have failed to start. Check: journalctl -u nexus-dashboard -n 50"
+    fi
+    
     # Open firewall if ufw is active
     if command -v ufw &>/dev/null && ufw status | grep -q "Status: active"; then
         log "Opening firewall port 9000..."
-        ufw allow 9000/tcp
+        ufw allow 9000/tcp 2>/dev/null || true
     fi
     
     log "Dashboard installed successfully!"
     echo -e "${GREEN}Dashboard URL: http://$SERVER_IP:9000${NC}"
+    echo -e "${YELLOW}Check status: systemctl status nexus-dashboard${NC}"
+    echo -e "${YELLOW}View logs: journalctl -u nexus-dashboard -f${NC}"
     
     cd - > /dev/null
 }
