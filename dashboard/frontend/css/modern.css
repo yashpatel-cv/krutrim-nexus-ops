@@ -1,25 +1,29 @@
 /* Modern Nexus Ops Dashboard - Clean & Professional */
 
 :root {
-    /* Colors - Light professional theme */
-    --bg-primary: #f8f9fa;
-    --bg-secondary: #ffffff;
-    --bg-hover: #f1f3f5;
-    --border-color: #e9ecef;
-    --text-primary: #212529;
-    --text-secondary: #6c757d;
-    --text-muted: #adb5bd;
+    /* Colors - OLED Dark Theme */
+    --bg-primary: #000000;
+    --bg-secondary: #0d0d0d;
+    --bg-hover: #1a1a1a;
+    --bg-card: #111111;
+    --border-color: #262626;
+    --text-primary: #e8e8e8;
+    --text-secondary: #a0a0a0;
+    --text-muted: #666666;
     
-    /* Status colors */
-    --status-healthy: #51cf66;
-    --status-warning: #ffd43b;
-    --status-degraded: #ff922b;
-    --status-error: #ff6b6b;
-    --status-info: #339af0;
+    /* Status colors - Vibrant for OLED */
+    --status-healthy: #00e676;
+    --status-warning: #ffd600;
+    --status-degraded: #ff6d00;
+    --status-error: #ff1744;
+    --status-info: #00b0ff;
     
-    /* Accent */
-    --accent-primary: #228be6;
-    --accent-hover: #1c7ed6;
+    /* Accent - Colorful for OLED */
+    --accent-primary: #00b4d8;
+    --accent-hover: #0096c7;
+    --accent-purple: #bb86fc;
+    --accent-pink: #ff4081;
+    --accent-teal: #1de9b6;
     
     /* Spacing */
     --space-xs: 0.25rem;
@@ -32,10 +36,11 @@
     --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     --font-mono: 'SF Mono', 'Monaco', 'Consolas', monospace;
     
-    /* Shadows */
-    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
-    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07);
-    --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+    /* Shadows - Subtle glow for OLED */
+    --shadow-sm: 0 2px 8px rgba(0, 180, 216, 0.15);
+    --shadow-md: 0 4px 12px rgba(0, 180, 216, 0.2);
+    --shadow-lg: 0 8px 24px rgba(0, 180, 216, 0.3);
+    --glow: 0 0 20px rgba(0, 180, 216, 0.4);
     
     /* Transitions */
     --transition: 150ms cubic-bezier(0.4, 0, 0.2, 1);
@@ -243,16 +248,17 @@ body {
 }
 
 .overview-card {
-    background: var(--bg-secondary);
+    background: var(--bg-card);
     border: 1px solid var(--border-color);
-    border-radius: 8px;
+    border-radius: 12px;
     padding: var(--space-lg);
     transition: all var(--transition);
 }
 
 .overview-card:hover {
-    box-shadow: var(--shadow-md);
+    box-shadow: var(--glow);
     transform: translateY(-2px);
+    border-color: var(--accent-primary);
 }
 
 .card-header {
@@ -326,15 +332,16 @@ body {
 }
 
 .node-card {
-    background: var(--bg-secondary);
+    background: var(--bg-card);
     border: 1px solid var(--border-color);
-    border-radius: 8px;
+    border-radius: 12px;
     padding: var(--space-lg);
     transition: all var(--transition);
 }
 
 .node-card:hover {
-    box-shadow: var(--shadow-md);
+    box-shadow: var(--glow);
+    border-color: var(--accent-primary);
 }
 
 .node-header {
@@ -454,11 +461,11 @@ body {
 }
 
 .chart-container {
-    background: var(--bg-secondary);
+    background: var(--bg-card);
     border: 1px solid var(--border-color);
-    border-radius: 8px;
+    border-radius: 12px;
     padding: var(--space-lg);
-    height: 300px;
+    height: 320px;
     display: flex;
     flex-direction: column;
 }
@@ -490,7 +497,7 @@ body {
     padding: var(--space-md);
     max-height: 300px;
     overflow-y: auto;
-    background: #fafbfc;
+    background: #000000;
 }
 
 .log-entry {
@@ -564,7 +571,7 @@ body {
 }
 
 .log-content::-webkit-scrollbar-track {
-    background: var(--bg-hover);
+    background: #000000;
 }
 
 .log-content::-webkit-scrollbar-thumb {
@@ -573,7 +580,7 @@ body {
 }
 
 .log-content::-webkit-scrollbar-thumb:hover {
-    background: var(--text-muted);
+    background: var(--accent-primary);
 }
 
 /* Responsive */
