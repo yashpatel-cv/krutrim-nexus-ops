@@ -59,7 +59,7 @@ class Settings(BaseSettings):
     secret_key: str = Field(default="change-this-in-production-use-env-var", min_length=32)
     
     # Paths
-    frontend_path: str = Field(default="./frontend", description="Frontend static files path")
+    frontend_path: str = Field(default="../frontend", description="Frontend static files path (relative to backend dir)")
     
     @field_validator("consul_host")
     @classmethod
