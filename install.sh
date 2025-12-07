@@ -159,7 +159,29 @@ EOF
     systemctl daemon-reload
     systemctl enable consul
     systemctl start consul
-    log "Consul installed and started"
+    
+    # Wait for Consul to be ready
+    log "Waiting for Consul to start..."
+    local max_wait=30
+    local waited=0
+    while ! systemctl is-active --quiet consul 2>/dev/null; do
+        if [ $waited -ge $max_wait ]; then
+            error "Consul failed to start after ${max_wait}s"
+            journalctl -u consul -n 20
+            return 1
+        fi
+        sleep 1
+        waited=$((waited + 1))
+    done
+    
+    # Additional wait for Consul to be fully ready
+    sleep 2
+    
+    if consul members &>/dev/null; then
+        log "Consul installed and running"
+    else
+        warn "Consul service started but not yet responding"
+    fi
 }
 
 # --- Manager Setup ---
@@ -672,6 +694,141 @@ EOF
     echo "This node is running BOTH manager and worker roles."
 }
 
+# --- Validation ---
+validate_installation() {
+    local has_errors=false
+    
+    echo ""
+    echo "═══════════════════════════════════════════════"
+    echo "  VALIDATING INSTALLATION"
+    echo "═══════════════════════════════════════════════"
+    echo ""
+    
+    # Check Consul
+    echo -n "Checking Consul... "
+    if systemctl is-active --quiet consul 2>/dev/null; then
+        echo -e "${GREEN}✓ Running${NC}"
+    else
+        echo -e "${RED}✗ NOT RUNNING${NC}"
+        echo -e "${RED}  ERROR: Consul service failed to start!${NC}"
+        echo -e "${YELLOW}  Fix: systemctl status consul${NC}"
+        has_errors=true
+    fi
+    
+    # Check Orchestrator (if manager or both)
+    if [[ "$ROLE" == "manager" ]] || [[ "$ROLE" == "both" ]]; then
+        echo -n "Checking Orchestrator... "
+        if systemctl is-active --quiet nexus-orchestrator 2>/dev/null; then
+            echo -e "${GREEN}✓ Running${NC}"
+        else
+            echo -e "${RED}✗ NOT RUNNING${NC}"
+            echo -e "${RED}  ERROR: Orchestrator service failed to start!${NC}"
+            echo -e "${YELLOW}  Fix: systemctl status nexus-orchestrator${NC}"
+            has_errors=true
+        fi
+    fi
+    
+    # Check Worker
+    if [[ "$ROLE" == "worker" ]] || [[ "$ROLE" == "both" ]]; then
+        echo -n "Checking Worker... "
+        if systemctl is-active --quiet nexus-worker 2>/dev/null; then
+            echo -e "${GREEN}✓ Running${NC}"
+        else
+            echo -e "${RED}✗ NOT RUNNING${NC}"
+            echo -e "${RED}  ERROR: Worker service failed to start!${NC}"
+            echo -e "${YELLOW}  Fix: systemctl status nexus-worker${NC}"
+            has_errors=true
+        fi
+    fi
+    
+    # Check Dashboard (if it was installed)
+    if systemctl is-enabled --quiet nexus-dashboard 2>/dev/null; then
+        echo -n "Checking Dashboard... "
+        if systemctl is-active --quiet nexus-dashboard 2>/dev/null; then
+            echo -e "${GREEN}✓ Running${NC}"
+            echo -e "${GREEN}  Access at: http://$SERVER_IP:9000${NC}"
+        else
+            echo -e "${RED}✗ NOT RUNNING${NC}"
+            echo -e "${RED}  ERROR: Dashboard service failed to start!${NC}"
+            echo -e "${YELLOW}  Fix: journalctl -u nexus-dashboard -n 50${NC}"
+            has_errors=true
+        fi
+    fi
+    
+    # Check Consul connectivity
+    echo -n "Checking Consul connectivity... "
+    if consul members &>/dev/null; then
+        echo -e "${GREEN}✓ Connected${NC}"
+    else
+        echo -e "${RED}✗ FAILED${NC}"
+        echo -e "${RED}  ERROR: Cannot connect to Consul!${NC}"
+        echo -e "${YELLOW}  Fix: systemctl restart consul${NC}"
+        has_errors=true
+    fi
+    
+    # Check Docker
+    echo -n "Checking Docker... "
+    if systemctl is-active --quiet docker 2>/dev/null; then
+        echo -e "${GREEN}✓ Running${NC}"
+    else
+        echo -e "${RED}✗ NOT RUNNING${NC}"
+        echo -e "${RED}  ERROR: Docker service is not running!${NC}"
+        echo -e "${YELLOW}  Fix: systemctl start docker${NC}"
+        has_errors=true
+    fi
+    
+    echo ""
+    echo "═══════════════════════════════════════════════"
+    
+    if [ "$has_errors" = true ]; then
+        echo -e "${RED}  ✗ INSTALLATION COMPLETED WITH ERRORS${NC}"
+        echo "═══════════════════════════════════════════════"
+        echo ""
+        echo -e "${YELLOW}Some services failed to start. Please fix the errors above.${NC}"
+        echo ""
+        echo -e "${YELLOW}Quick Fix Commands:${NC}"
+        echo "  1. Check service logs:"
+        echo "     journalctl -u consul -n 50"
+        echo "     journalctl -u nexus-orchestrator -n 50"
+        echo "     journalctl -u nexus-worker -n 50"
+        echo "     journalctl -u nexus-dashboard -n 50"
+        echo ""
+        echo "  2. Restart all services:"
+        echo "     systemctl restart consul"
+        echo "     systemctl restart nexus-orchestrator"
+        echo "     systemctl restart nexus-worker"
+        echo "     systemctl restart nexus-dashboard"
+        echo ""
+        echo "  3. Or run the fix script:"
+        echo "     cd /opt/krutrim-nexus-ops"
+        echo "     chmod +x fix-services.sh"
+        echo "     sudo ./fix-services.sh"
+        echo ""
+        return 1
+    else
+        echo -e "${GREEN}  ✓ ALL SERVICES RUNNING SUCCESSFULLY${NC}"
+        echo "═══════════════════════════════════════════════"
+        echo ""
+        echo -e "${BLUE}╔══════════════════════════════════════════════╗${NC}"
+        echo -e "${BLUE}║      Krutrim Nexus Ops is now running!      ║${NC}"
+        echo -e "${BLUE}╚══════════════════════════════════════════════╝${NC}"
+        echo ""
+        echo -e "${GREEN}Access Points:${NC}"
+        echo "  - Consul UI: http://$SERVER_IP:8500"
+        if systemctl is-active --quiet nexus-dashboard 2>/dev/null; then
+            echo "  - Dashboard: http://$SERVER_IP:9000"
+        fi
+        echo ""
+        echo -e "${GREEN}Useful Commands:${NC}"
+        echo "  - Check cluster: consul members"
+        echo "  - View services: consul catalog services"
+        echo "  - Check logs: journalctl -u nexus-orchestrator -f"
+        echo "  - Docker status: docker ps"
+        echo ""
+        return 0
+    fi
+}
+
 # --- Execution ---
 case "$ROLE" in
     manager)
@@ -691,15 +848,5 @@ case "$ROLE" in
         ;;
 esac
 
-log "Installation complete!"
-echo ""
-echo -e "${BLUE}╔══════════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║      Krutrim Nexus Ops is now running!      ║${NC}"
-echo -e "${BLUE}╚══════════════════════════════════════════════╝${NC}"
-echo ""
-echo -e "${GREEN}Useful commands:${NC}"
-echo "  - Check Consul: consul members"
-echo "  - View services: consul catalog services"
-echo "  - Check logs: journalctl -u nexus-orchestrator -f"
-echo "  - Docker status: docker ps"
-echo ""
+log "Installation phase complete. Validating..."
+validate_installation
