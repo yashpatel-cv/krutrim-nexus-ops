@@ -10,6 +10,17 @@ NEXUS_HOME="/opt/nexus"
 CLUSTER_FILE="$NEXUS_HOME/cluster.yml"
 CONSUL_VERSION="1.17.0"
 
+# --- Colors (MUST BE DEFINED FIRST) ---
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+log() { echo -e "${GREEN}[$(date +'%H:%M:%S')]${NC} $*"; }
+warn() { echo -e "${YELLOW}[WARNING]${NC} $*"; }
+err() { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
+
 # --- Dynamic Environment Detection ---
 # Auto-detect private IP (works on ARM64 and AMD64)
 PRIVATE_IP="$(hostname -I | awk '{print $1}')"
@@ -84,17 +95,6 @@ fi
 
 # Store as SERVER_IP for compatibility
 SERVER_IP="$BIND_IP"
-
-# --- Colors ---
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-BLUE='\033[0;34m'
-NC='\033[0m'
-
-log() { echo -e "${GREEN}[$(date +'%H:%M:%S')]${NC} $*"; }
-warn() { echo -e "${YELLOW}[WARNING]${NC} $*"; }
-err() { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
 
 echo -e "${BLUE}"
 cat << 'EOF'
