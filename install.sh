@@ -686,6 +686,7 @@ install_dashboard() {
     # Install systemd service
     log "Installing dashboard service..."
     local service_file="$(pwd)/../../config/systemd/nexus-dashboard.service"
+    local frontend_path="$(pwd)/../frontend"
     
     if [ -f "$service_file" ]; then
         # Update service file with correct paths
@@ -696,7 +697,7 @@ install_dashboard() {
         # Create service file if not exists
         cat > /etc/systemd/system/nexus-dashboard.service <<EOF
 [Unit]
-Description=Krutrim Nexus Dashboard
+Description=Krutrim Nexus Ops Dashboard
 After=network.target consul.service
 Requires=consul.service
 
@@ -704,6 +705,7 @@ Requires=consul.service
 Type=simple
 User=root
 WorkingDirectory=$backend_path
+Environment="NEXUS_FRONTEND_PATH=$frontend_path"
 ExecStart=$backend_path/venv/bin/uvicorn app:app --host 0.0.0.0 --port 9000
 Restart=always
 RestartSec=10
@@ -960,6 +962,10 @@ setup_both() {
     for f in nexus.py inventory.yml services.yml bootstrap_worker.sh run-services.sh services.py proc_ipc.py; do
         [ -f "$f" ] && cp "$f" "$NEXUS_HOME/" || warn "$f not found"
     done
+    
+    # Make scripts executable
+    chmod +x "$NEXUS_HOME"/*.sh 2>/dev/null || true
+    chmod +x "$NEXUS_HOME"/*.py 2>/dev/null || true
     
     # Copy config files
     for f in config/*.conf config/*.service config/torrc; do

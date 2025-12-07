@@ -163,10 +163,15 @@ def validate_environment() -> tuple[bool, list[str]]:
         
         # Validate paths
         from pathlib import Path
-        frontend_path = Path(__file__).parent.parent / settings.frontend_path
-        if not frontend_path.exists():
-            errors.append(f"Frontend path not found: {frontend_path}")
+        frontend_path = Path(settings.frontend_path)
+        if not frontend_path.is_absolute():
+            # Make relative to backend directory (where app.py runs from)
+            # When systemd runs the app, WorkingDirectory is set to backend dir
+            frontend_path = Path.cwd() / frontend_path
         
+        if not frontend_path.exists():
+            errors.append(f"Frontend path not found: {frontend_path} (cwd: {Path.cwd()})")
+    
     except Exception as e:
         errors.append(f"Environment validation failed: {e}")
     
