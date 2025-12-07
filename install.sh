@@ -11,30 +11,78 @@ CLUSTER_FILE="$NEXUS_HOME/cluster.yml"
 CONSUL_VERSION="1.17.0"
 
 # --- Dynamic Environment Detection ---
-# Detect actual bind IP for this host (works on ARM64 and AMD64)
-BIND_IP="$(hostname -I | awk '{print $1}')"
-if [ -z "$BIND_IP" ] || [ "$BIND_IP" == "127.0.0.1" ]; then
+# Auto-detect private IP (works on ARM64 and AMD64)
+PRIVATE_IP="$(hostname -I | awk '{print $1}')"
+if [ -z "$PRIVATE_IP" ] || [ "$PRIVATE_IP" == "127.0.0.1" ]; then
     # Fallback: try to get IP from default route
-    BIND_IP="$(ip route get 1 2>/dev/null | awk '{print $7; exit}')"
+    PRIVATE_IP="$(ip route get 1 2>/dev/null | awk '{print $7; exit}')"
 fi
-if [ -z "$BIND_IP" ] || [ "$BIND_IP" == "127.0.0.1" ]; then
-    # Last resort: prompt user
-    read -p "Enter server IP address: " BIND_IP
-    if [ -z "$BIND_IP" ]; then
-        err "Server IP is required"
-    fi
+if [ -z "$PRIVATE_IP" ]; then
+    PRIVATE_IP="unknown"
 fi
 
 # Detect domain (try multiple methods)
-DOMAIN="$(hostname -d 2>/dev/null)"
-if [ -z "$DOMAIN" ]; then
-    DOMAIN="$(dnsdomainname 2>/dev/null)"
+DETECTED_DOMAIN="$(hostname -d 2>/dev/null)"
+if [ -z "$DETECTED_DOMAIN" ]; then
+    DETECTED_DOMAIN="$(dnsdomainname 2>/dev/null)"
 fi
-if [ -z "$DOMAIN" ]; then
-    DOMAIN="local.domain"
+if [ -z "$DETECTED_DOMAIN" ]; then
+    DETECTED_DOMAIN="local.domain"
 fi
 
-# Store detected values as SERVER_IP for compatibility
+# Try to detect public IP (for cloud instances)
+PUBLIC_IP="$(curl -s -m 5 ifconfig.me 2>/dev/null || curl -s -m 5 icanhazip.com 2>/dev/null || echo "")"
+
+# Display auto-detected values
+echo -e "${BLUE}=== Auto-Detected Environment ===${NC}"
+echo "Architecture: Detecting..."
+echo "Private IP: ${PRIVATE_IP}"
+if [ -n "$PUBLIC_IP" ]; then
+    echo "Public IP (detected): ${PUBLIC_IP}"
+fi
+echo "Domain (detected): ${DETECTED_DOMAIN}"
+echo ""
+
+# Ask user for public IP/bind address
+echo -e "${YELLOW}Server IP Configuration:${NC}"
+if [ -n "$PUBLIC_IP" ] && [ "$PUBLIC_IP" != "$PRIVATE_IP" ]; then
+    echo "Detected Public IP: ${PUBLIC_IP}"
+    echo "Detected Private IP: ${PRIVATE_IP}"
+    echo ""
+    echo "For cloud instances (Oracle, AWS, etc), use your PUBLIC IP for Consul bind_addr."
+    read -p "Enter server IP to use (press Enter for public IP ${PUBLIC_IP}): " USER_IP
+    if [ -z "$USER_IP" ]; then
+        BIND_IP="$PUBLIC_IP"
+    else
+        BIND_IP="$USER_IP"
+    fi
+else
+    echo "Detected IP: ${PRIVATE_IP}"
+    read -p "Enter server IP (press Enter for ${PRIVATE_IP}, or input custom): " USER_IP
+    if [ -z "$USER_IP" ]; then
+        BIND_IP="$PRIVATE_IP"
+    else
+        BIND_IP="$USER_IP"
+    fi
+fi
+
+# Validate IP was provided
+if [ -z "$BIND_IP" ] || [ "$BIND_IP" == "unknown" ]; then
+    err "Server IP is required"
+fi
+
+# Ask user for domain
+echo ""
+echo -e "${YELLOW}Domain Configuration:${NC}"
+echo "Detected domain: ${DETECTED_DOMAIN}"
+read -p "Enter domain name (press Enter for '${DETECTED_DOMAIN}', or input custom): " USER_DOMAIN
+if [ -z "$USER_DOMAIN" ]; then
+    DOMAIN="$DETECTED_DOMAIN"
+else
+    DOMAIN="$USER_DOMAIN"
+fi
+
+# Store as SERVER_IP for compatibility
 SERVER_IP="$BIND_IP"
 
 # --- Colors ---
@@ -65,23 +113,34 @@ case "$ARCH" in
     armv7l)  ARCH_LABEL="armv7"; CONSUL_ARCH="arm" ;;
     *)       err "Unsupported architecture: $ARCH" ;;
 esac
-log "Detected architecture: ${ARCH_LABEL} (${ARCH})"
-log "Detected bind IP: ${BIND_IP}"
-log "Detected domain: ${DOMAIN}"
-log "Detected OS: $([ -f /etc/debian_version ] && echo 'Debian/Ubuntu' || echo 'Other')"
+log "Architecture: ${ARCH_LABEL} (${ARCH})"
+log "OS: $([ -f /etc/debian_version ] && echo 'Debian/Ubuntu' || [ -f /etc/oracle-release ] && echo 'Oracle Linux' || echo 'Other')"
 
-# Display detected environment for user confirmation
+# Display final configuration for user confirmation
 echo ""
-echo -e "${YELLOW}=== Environment Detection ===${NC}"
-echo "Architecture: ${ARCH_LABEL} (${ARCH})"
-echo "Server IP: ${BIND_IP}"
-echo "Domain: ${DOMAIN}"
-echo "Consul Version: ${CONSUL_VERSION}"
-echo "Installation Path: ${NEXUS_HOME}"
+echo -e "${GREEN}=== Final Installation Configuration ===${NC}"
+echo -e "${BLUE}System:${NC}"
+echo "  Architecture: ${ARCH_LABEL} (${ARCH})"
+echo "  OS: $([ -f /etc/debian_version ] && echo 'Debian/Ubuntu' || [ -f /etc/oracle-release ] && echo 'Oracle Linux' || echo 'Other')"
 echo ""
-read -p "Proceed with these settings? [Y/n]: " confirm
+echo -e "${BLUE}Network:${NC}"
+echo "  Server IP (bind_addr): ${BIND_IP}"
+echo "  Domain: ${DOMAIN}"
+if [ -n "$PUBLIC_IP" ] && [ "$PUBLIC_IP" != "$BIND_IP" ]; then
+    echo "  Public IP (for reference): ${PUBLIC_IP}"
+fi
+if [ -n "$PRIVATE_IP" ] && [ "$PRIVATE_IP" != "$BIND_IP" ]; then
+    echo "  Private IP (for reference): ${PRIVATE_IP}"
+fi
+echo ""
+echo -e "${BLUE}Installation:${NC}"
+echo "  Consul Version: ${CONSUL_VERSION}"
+echo "  Installation Path: ${NEXUS_HOME}"
+echo ""
+echo -e "${YELLOW}These values will be used for Consul bind_addr, dashboard endpoints, etc.${NC}"
+read -p "Proceed with installation? [Y/n]: " confirm
 if [[ "$confirm" =~ ^([nN][oO]|[nN])$ ]]; then
-    echo "Installation cancelled by user"
+    echo -e "${RED}Installation cancelled by user${NC}"
     exit 0
 fi
 

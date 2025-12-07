@@ -23,10 +23,12 @@ class Settings(BaseSettings):
     # Server
     host: str = Field(default="0.0.0.0", description="Server bind address")
     port: int = Field(default=9000, ge=1024, le=65535, description="Server port")
+    public_url: Optional[str] = Field(default=None, description="Public URL (e.g., http://64.181.212.50:9000)")
     
     # Consul
     consul_host: str = Field(default="localhost", description="Consul host")
     consul_port: int = Field(default=8500, ge=1, le=65535, description="Consul port")
+    consul_bind_addr: Optional[str] = Field(default=None, description="Consul bind address (for reference)")
     consul_scheme: str = Field(default="http", pattern="^(http|https)$", description="Consul scheme")
     consul_token: Optional[str] = Field(default=None, description="Consul ACL token")
     consul_datacenter: str = Field(default="krutrim-dc1", description="Consul datacenter")
@@ -65,9 +67,9 @@ class Settings(BaseSettings):
         """Validate Consul host"""
         if not v or v.strip() == "":
             raise ValueError("Consul host cannot be empty")
-        # Prevent using 0.0.0.0 as it's invalid for client connections
+        # Allow localhost for local Consul, but warn about 0.0.0.0
         if v == "0.0.0.0":
-            raise ValueError("Consul host cannot be 0.0.0.0 (use localhost or specific IP)")
+            logger.warning("Consul host is 0.0.0.0 - this may not work for remote connections")
         return v.strip()
     
     @field_validator("secret_key")

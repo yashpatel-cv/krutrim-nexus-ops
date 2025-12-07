@@ -25,15 +25,39 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 # Detect bind IP dynamically (ARM64 and AMD64 compatible)
-BIND_IP="$(hostname -I | awk '{print $1}')"
-if [ -z "$BIND_IP" ] || [ "$BIND_IP" == "127.0.0.1" ]; then
-    # Fallback: try to get IP from default route
-    BIND_IP="$(ip route get 1 2>/dev/null | awk '{print $7; exit}')"
+PRIVATE_IP="$(hostname -I | awk '{print $1}')"
+if [ -z "$PRIVATE_IP" ] || [ "$PRIVATE_IP" == "127.0.0.1" ]; then
+    PRIVATE_IP="$(ip route get 1 2>/dev/null | awk '{print $7; exit}')"
 fi
-if [ -z "$BIND_IP" ] || [ "$BIND_IP" == "127.0.0.1" ]; then
-    error "Cannot detect server IP address"
-    echo "Please check network configuration"
-    echo "Try: ip addr show | grep 'inet '"
+
+# Try to detect public IP (for cloud instances)
+PUBLIC_IP="$(curl -s -m 5 ifconfig.me 2>/dev/null || curl -s -m 5 icanhazip.com 2>/dev/null || echo "")"
+
+# Ask user which IP to use
+echo ""
+if [ -n "$PUBLIC_IP" ] && [ "$PUBLIC_IP" != "$PRIVATE_IP" ]; then
+    echo "Detected Public IP: ${PUBLIC_IP}"
+    echo "Detected Private IP: ${PRIVATE_IP}"
+    echo ""
+    read -p "Enter server IP to use (press Enter for public IP ${PUBLIC_IP}): " USER_IP
+    if [ -z "$USER_IP" ]; then
+        BIND_IP="$PUBLIC_IP"
+    else
+        BIND_IP="$USER_IP"
+    fi
+else
+    echo "Detected IP: ${PRIVATE_IP}"
+    read -p "Enter server IP (press Enter for ${PRIVATE_IP}): " USER_IP
+    if [ -z "$USER_IP" ]; then
+        BIND_IP="$PRIVATE_IP"
+    else
+        BIND_IP="$USER_IP"
+    fi
+fi
+
+if [ -z "$BIND_IP" ]; then
+    error "Cannot determine server IP address"
+    echo "Please check network configuration or provide IP manually"
     exit 1
 fi
 log "Using bind IP: $BIND_IP"
