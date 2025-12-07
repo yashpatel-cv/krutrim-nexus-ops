@@ -14,6 +14,7 @@ import json
 import sys
 from pathlib import Path
 from typing import List
+from datetime import datetime
 
 # Import configuration first
 try:
@@ -131,8 +132,25 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
-@app.get("/")
-async def root():
+@app.get("/api", tags=["Root"])
+async def api_root():
+    """API root endpoint with info"""
+    return {
+        "message": f"{settings.app_name}",
+        "version": settings.app_version,
+        "docs": "/api/docs" if settings.debug else "API documentation disabled"
+    }
+
+@app.get("/", response_class=FileResponse)
+async def serve_frontend():
+    """Serve the frontend dashboard HTML"""
+    frontend_html = Path(__file__).parent.parent / settings.frontend_path / "index.html"
+    if frontend_html.exists():
+        return FileResponse(str(frontend_html))
+    return JSONResponse(
+        status_code=404,
+        content={"error": "Frontend not found", "path": str(frontend_html)}
+    )
 
 
 @app.websocket("/ws/realtime")
