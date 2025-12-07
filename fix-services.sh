@@ -24,10 +24,17 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-# Detect bind IP
+# Detect bind IP dynamically (ARM64 and AMD64 compatible)
 BIND_IP="$(hostname -I | awk '{print $1}')"
-if [ -z "$BIND_IP" ]; then
-    BIND_IP="64.181.212.50"
+if [ -z "$BIND_IP" ] || [ "$BIND_IP" == "127.0.0.1" ]; then
+    # Fallback: try to get IP from default route
+    BIND_IP="$(ip route get 1 2>/dev/null | awk '{print $7; exit}')"
+fi
+if [ -z "$BIND_IP" ] || [ "$BIND_IP" == "127.0.0.1" ]; then
+    error "Cannot detect server IP address"
+    echo "Please check network configuration"
+    echo "Try: ip addr show | grep 'inet '"
+    exit 1
 fi
 log "Using bind IP: $BIND_IP"
 

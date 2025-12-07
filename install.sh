@@ -9,14 +9,33 @@ set -Eeuo pipefail
 NEXUS_HOME="/opt/nexus"
 CLUSTER_FILE="$NEXUS_HOME/cluster.yml"
 CONSUL_VERSION="1.17.0"
-DOMAIN="krutrimseva.cbu.net"
-SERVER_IP="64.181.212.50"
 
-# Detect actual bind IP for this host
+# --- Dynamic Environment Detection ---
+# Detect actual bind IP for this host (works on ARM64 and AMD64)
 BIND_IP="$(hostname -I | awk '{print $1}')"
 if [ -z "$BIND_IP" ] || [ "$BIND_IP" == "127.0.0.1" ]; then
-    BIND_IP="$SERVER_IP"
+    # Fallback: try to get IP from default route
+    BIND_IP="$(ip route get 1 2>/dev/null | awk '{print $7; exit}')"
 fi
+if [ -z "$BIND_IP" ] || [ "$BIND_IP" == "127.0.0.1" ]; then
+    # Last resort: prompt user
+    read -p "Enter server IP address: " BIND_IP
+    if [ -z "$BIND_IP" ]; then
+        err "Server IP is required"
+    fi
+fi
+
+# Detect domain (try multiple methods)
+DOMAIN="$(hostname -d 2>/dev/null)"
+if [ -z "$DOMAIN" ]; then
+    DOMAIN="$(dnsdomainname 2>/dev/null)"
+fi
+if [ -z "$DOMAIN" ]; then
+    DOMAIN="local.domain"
+fi
+
+# Store detected values as SERVER_IP for compatibility
+SERVER_IP="$BIND_IP"
 
 # --- Colors ---
 GREEN='\033[0;32m'
@@ -46,8 +65,25 @@ case "$ARCH" in
     armv7l)  ARCH_LABEL="armv7"; CONSUL_ARCH="arm" ;;
     *)       err "Unsupported architecture: $ARCH" ;;
 esac
-log "Detected architecture: ${ARCH_LABEL}"
+log "Detected architecture: ${ARCH_LABEL} (${ARCH})"
 log "Detected bind IP: ${BIND_IP}"
+log "Detected domain: ${DOMAIN}"
+log "Detected OS: $([ -f /etc/debian_version ] && echo 'Debian/Ubuntu' || echo 'Other')"
+
+# Display detected environment for user confirmation
+echo ""
+echo -e "${YELLOW}=== Environment Detection ===${NC}"
+echo "Architecture: ${ARCH_LABEL} (${ARCH})"
+echo "Server IP: ${BIND_IP}"
+echo "Domain: ${DOMAIN}"
+echo "Consul Version: ${CONSUL_VERSION}"
+echo "Installation Path: ${NEXUS_HOME}"
+echo ""
+read -p "Proceed with these settings? [Y/n]: " confirm
+if [[ "$confirm" =~ ^([nN][oO]|[nN])$ ]]; then
+    echo "Installation cancelled by user"
+    exit 0
+fi
 
 # --- Pre-flight Validation ---
 prevalidate_environment() {
