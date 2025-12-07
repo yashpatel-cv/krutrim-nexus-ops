@@ -74,7 +74,7 @@ install_base_deps() {
     if [ -f /etc/debian_version ]; then
         export DEBIAN_FRONTEND=noninteractive
         apt-get update -y
-        apt-get install -y curl wget unzip jq git python3 python3-pip python3-yaml \
+        apt-get install -y curl wget unzip jq git python3 python3-pip python3-yaml python3-docker \
             openssh-server rsync net-tools htop vim docker.io docker-compose
     elif [ -f /etc/arch-release ]; then
         pacman -Sy --noconfirm curl wget unzip jq git python python-pip python-yaml \
@@ -273,9 +273,8 @@ setup_manager() {
     install_base_deps
     install_consul "server"
     
-    # Install Python dependencies
-    pip3 install pyyaml docker consul-python --break-system-packages 2>/dev/null || \
-    pip3 install pyyaml docker python-consul
+    # Install Python dependencies (pyyaml and docker already installed via apt)
+    pip3 install python-consul --break-system-packages 2>/dev/null || true
     
     # Copy nexus files
     mkdir -p "$NEXUS_HOME"
@@ -459,9 +458,8 @@ setup_both() {
     install_base_deps
     install_consul "server"
     
-    # Manager components
-    pip3 install pyyaml docker consul-python --break-system-packages 2>/dev/null || \
-    pip3 install pyyaml docker python-consul
+    # Manager components (pyyaml and docker already installed via apt)
+    pip3 install python-consul --break-system-packages 2>/dev/null || true
     
     mkdir -p "$NEXUS_HOME"
     
