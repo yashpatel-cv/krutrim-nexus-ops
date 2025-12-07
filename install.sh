@@ -266,6 +266,81 @@ EOF
     log "Orchestrator service created"
 }
 
+# --- Dashboard Installation ---
+install_dashboard() {
+    log "Installing Nexus Dashboard (Web UI)..."
+    
+    local dashboard_path="$(pwd)/dashboard"
+    local backend_path="$dashboard_path/backend"
+    
+    if [ ! -d "$backend_path" ]; then
+        warn "Dashboard directory not found at $dashboard_path"
+        return 1
+    fi
+    
+    # Install Python virtual environment package
+    if [ -f /etc/debian_version ]; then
+        apt-get install -y python3-venv python3-full
+    fi
+    
+    # Create virtual environment
+    cd "$backend_path"
+    log "Creating Python virtual environment..."
+    python3 -m venv venv
+    
+    # Install dependencies
+    log "Installing dashboard dependencies..."
+    source venv/bin/activate
+    pip install -r requirements.txt
+    deactivate
+    
+    # Install systemd service
+    log "Installing dashboard service..."
+    local service_file="$(pwd)/../../config/systemd/nexus-dashboard.service"
+    
+    if [ -f "$service_file" ]; then
+        # Update service file with correct paths
+        sed -e "s|WorkingDirectory=.*|WorkingDirectory=$backend_path|g" \
+            -e "s|ExecStart=.*|ExecStart=$backend_path/venv/bin/uvicorn app:app --host 0.0.0.0 --port 9000|g" \
+            "$service_file" > /etc/systemd/system/nexus-dashboard.service
+    else
+        # Create service file if not exists
+        cat > /etc/systemd/system/nexus-dashboard.service <<EOF
+[Unit]
+Description=Krutrim Nexus Dashboard
+After=network.target consul.service
+Requires=consul.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=$backend_path
+ExecStart=$backend_path/venv/bin/uvicorn app:app --host 0.0.0.0 --port 9000
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    fi
+    
+    # Start dashboard service
+    systemctl daemon-reload
+    systemctl enable nexus-dashboard
+    systemctl start nexus-dashboard
+    
+    # Open firewall if ufw is active
+    if command -v ufw &>/dev/null && ufw status | grep -q "Status: active"; then
+        log "Opening firewall port 9000..."
+        ufw allow 9000/tcp
+    fi
+    
+    log "Dashboard installed successfully!"
+    echo -e "${GREEN}Dashboard URL: http://$SERVER_IP:9000${NC}"
+    
+    cd - > /dev/null
+}
+
 setup_manager() {
     log "Setting up Manager node..."
     
@@ -304,6 +379,17 @@ setup_manager() {
     
     # Create orchestrator
     create_orchestrator
+    
+    # Prompt for dashboard installation
+    echo ""
+    echo -e "${YELLOW}Would you like to install the Web Dashboard (recommended)? [Y/n]${NC}"
+    read -r response
+    if [[ "$response" =~ ^([yY][eE][sS]|[yY]|)$ ]]; then
+        install_dashboard
+    else
+        log "Skipping dashboard installation"
+        echo -e "${YELLOW}To install later, run: cd dashboard/backend && python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt${NC}"
+    fi
     
     log "Manager setup complete!"
     echo ""
@@ -502,6 +588,17 @@ EOF
     systemctl daemon-reload
     systemctl enable nexus-worker
     systemctl start nexus-worker
+    
+    # Prompt for dashboard installation
+    echo ""
+    echo -e "${YELLOW}Would you like to install the Web Dashboard (recommended)? [Y/n]${NC}"
+    read -r response
+    if [[ "$response" =~ ^([yY][eE][sS]|[yY]|)$ ]]; then
+        install_dashboard
+    else
+        log "Skipping dashboard installation"
+        echo -e "${YELLOW}To install later, run: cd dashboard/backend && python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt${NC}"
+    fi
     
     log "Combined Manager+Worker setup complete!"
     echo ""

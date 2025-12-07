@@ -16,23 +16,18 @@ chmod +x install.sh
 sudo ./install.sh
 # Select option 3 (Manager + Worker)
 
-# 3. Install dashboard
-cd dashboard/backend
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-
-# 4. Start dashboard service
-sudo cp ../../config/systemd/nexus-dashboard.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable nexus-dashboard
-sudo systemctl start nexus-dashboard
-
-# 5. Open firewall
-sudo ufw allow 9000/tcp
-
-# 6. Access dashboard
-# Open http://64.181.212.50:9000
+# 3. Dashboard installation (optional)
+# The installer will prompt you to install the web dashboard.
+# Answer 'Y' when asked: "Would you like to install the Web Dashboard (recommended)? [Y/n]"
+#
+# This automatically:
+# - Creates Python virtual environment
+# - Installs dependencies
+# - Configures systemd service
+# - Opens firewall port 9000
+# - Starts the dashboard
+#
+# Access dashboard at: http://64.181.212.50:9000
 ```
 
 **Done!** Your cluster is running with web dashboard.
