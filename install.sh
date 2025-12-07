@@ -296,24 +296,26 @@ install_base_deps() {
 cleanup_consul() {
     log "Cleaning up any existing Consul processes..."
     
-    # Stop any running Consul service
+    # Stop Consul service if running
     systemctl stop consul 2>/dev/null || true
     
-    # Kill any stray Consul processes
+    # Kill any remaining consul processes
     pkill -9 consul 2>/dev/null || true
+    
+    # Wait a moment for processes to fully terminate
     sleep 1
     
-    # Reset systemd failure state
-    systemctl reset-failed consul 2>/dev/null || true
-    
-    # Clean up data directory (preserve config)
-    if [ -d "/var/consul" ]; then
-        log "Cleaning Consul data directory..."
-        rm -rf /var/consul/*
-    fi
+    log "Cleaning Consul data directory..."
+    # Clean data directory but preserve structure
+    rm -rf /var/consul/* 2>/dev/null || true
     
     # Remove any lock files
     rm -f /var/consul/.lock 2>/dev/null || true
+    
+    # CRITICAL: Remove ALL old config files to prevent conflicts
+    log "Removing old Consul configuration files..."
+    rm -f /etc/consul.d/*.json 2>/dev/null || true
+    rm -f /etc/consul.d/*.hcl 2>/dev/null || true
     
     log "Consul cleanup complete"
 }
