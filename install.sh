@@ -12,6 +12,12 @@ CONSUL_VERSION="1.17.0"
 DOMAIN="krutrimseva.cbu.net"
 SERVER_IP="64.181.212.50"
 
+# Detect actual bind IP for this host
+BIND_IP="$(hostname -I | awk '{print $1}')"
+if [ -z "$BIND_IP" ] || [ "$BIND_IP" == "127.0.0.1" ]; then
+    BIND_IP="$SERVER_IP"
+fi
+
 # --- Colors ---
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -41,6 +47,90 @@ case "$ARCH" in
     *)       err "Unsupported architecture: $ARCH" ;;
 esac
 log "Detected architecture: ${ARCH_LABEL}"
+log "Detected bind IP: ${BIND_IP}"
+
+# --- Pre-flight Validation ---
+prevalidate_environment() {
+    local errors=0
+    
+    echo ""
+    log "Running pre-flight checks..."
+    
+    # Check root
+    if [ "$EUID" -ne 0 ]; then
+        err "This script must be run as root (use sudo)"
+    fi
+    
+    # Check OS
+    if [ ! -f /etc/debian_version ] && [ ! -f /etc/arch-release ]; then
+        warn "Unsupported OS detected. This script supports Debian/Ubuntu and Arch Linux."
+        errors=$((errors + 1))
+    fi
+    
+    # Check disk space
+    local free_space
+    free_space=$(df / | awk 'NR==2 {print $4}')
+    if [ "$free_space" -lt 2097152 ]; then  # Less than 2GB
+        warn "Low disk space: $(df -h / | awk 'NR==2 {print $4}') free. Minimum 2GB recommended."
+        errors=$((errors + 1))
+    fi
+    
+    # Check memory
+    local free_mem
+    free_mem=$(free -m | awk 'NR==2 {print $7}')
+    if [ "$free_mem" -lt 512 ]; then
+        warn "Low memory: ${free_mem}MB available. Minimum 512MB recommended."
+        errors=$((errors + 1))
+    fi
+    
+    # Check network connectivity
+    if ! ping -c 1 -W 2 8.8.8.8 &>/dev/null; then
+        warn "Network connectivity test failed. Internet access may be required."
+        errors=$((errors + 1))
+    fi
+    
+    # Check required commands
+    for cmd in systemctl wget curl unzip; do
+        if ! command -v "$cmd" &>/dev/null; then
+            warn "Required command not found: $cmd (will be installed)"
+        fi
+    done
+    
+    # Check Python 3
+    if ! command -v python3 &>/dev/null; then
+        warn "Python 3 not found (will be installed)"
+    else
+        local py_version
+        py_version=$(python3 --version | awk '{print $2}' | cut -d. -f1,2)
+        log "Python version: $py_version"
+        if [ "${py_version//./}" -lt 38 ]; then
+            warn "Python 3.8+ recommended, found $py_version"
+            errors=$((errors + 1))
+        fi
+    fi
+    
+    # Check for existing Consul ports
+    log "Checking for port conflicts..."
+    local consul_ports_used=false
+    for port in 8500 8600 8301 8302; do
+        if netstat -tuln 2>/dev/null | grep -q ":$port "; then
+            warn "Port $port already in use (will attempt cleanup)"
+            consul_ports_used=true
+        fi
+    done
+    
+    if [ "$errors" -gt 0 ]; then
+        warn "Pre-flight checks completed with $errors warnings"
+        read -p "Continue anyway? [y/N]: " response
+        if [[ ! "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
+            err "Installation cancelled by user"
+        fi
+    else
+        log "Pre-flight checks passed"
+    fi
+}
+
+prevalidate_environment
 
 # --- Interactive Role Selection ---
 ROLE=""
@@ -141,34 +231,49 @@ install_consul() {
     mkdir -p /etc/consul.d /var/consul
     
     if [ "$mode" == "server" ]; then
+        log "Configuring Consul server with bind_addr=$BIND_IP"
         cat > /etc/consul.d/server.json <<EOF
 {
   "server": true,
   "bootstrap_expect": 1,
   "data_dir": "/var/consul",
   "datacenter": "krutrim-dc1",
-  "bind_addr": "0.0.0.0",
+  "bind_addr": "$BIND_IP",
+  "advertise_addr": "$BIND_IP",
   "client_addr": "0.0.0.0",
   "ui_config": {
     "enabled": true
   },
-  "log_level": "INFO"
+  "log_level": "INFO",
+  "enable_syslog": false
 }
 EOF
     else
         read -p "Enter Manager IP for Consul cluster: " manager_ip
+        log "Configuring Consul client with bind_addr=$BIND_IP, joining $manager_ip"
         cat > /etc/consul.d/client.json <<EOF
 {
   "server": false,
   "data_dir": "/var/consul",
   "datacenter": "krutrim-dc1",
-  "bind_addr": "0.0.0.0",
+  "bind_addr": "$BIND_IP",
+  "advertise_addr": "$BIND_IP",
   "client_addr": "0.0.0.0",
   "retry_join": ["$manager_ip"],
-  "log_level": "INFO"
+  "log_level": "INFO",
+  "enable_syslog": false
 }
 EOF
     fi
+    
+    # Validate Consul configuration
+    log "Validating Consul configuration..."
+    if ! /usr/local/bin/consul validate /etc/consul.d 2>&1 | tee /tmp/consul_validate.log; then
+        error "Consul configuration validation failed!"
+        cat /tmp/consul_validate.log
+        return 1
+    fi
+    log "Consul configuration validated successfully"
     
     cat > /etc/systemd/system/consul.service <<'EOF'
 [Unit]
@@ -204,7 +309,27 @@ EOF
     else
         log "Starting Consul service..."
         
+        # Check for port conflicts BEFORE starting
+        log "Checking for port conflicts..."
+        local ports_in_use=()
+        for port in 8500 8600 8301 8302; do
+            if netstat -tuln 2>/dev/null | grep -q ":$port "; then
+                ports_in_use+=("$port")
+            fi
+        done
+        
+        if [ ${#ports_in_use[@]} -gt 0 ]; then
+            error "Consul ports already in use: ${ports_in_use[*]}"
+            echo "Processes using Consul ports:"
+            for port in "${ports_in_use[@]}"; do
+                echo "Port $port:"
+                lsof -i ":$port" 2>/dev/null || netstat -tulnp | grep ":$port"
+            done
+            return 1
+        fi
+        
         # Start Consul and capture any immediate errors
+        log "Starting Consul with bind address: $BIND_IP"
         if ! systemctl start consul 2>&1 | tee /tmp/consul_start.log; then
             error "Failed to start Consul service"
             echo "Recent Consul logs:"
@@ -212,6 +337,9 @@ EOF
             echo ""
             echo "Consul config:"
             cat /etc/consul.d/*.json 2>/dev/null || true
+            echo ""
+            echo "Network interfaces:"
+            ip addr show
             return 1
         fi
         

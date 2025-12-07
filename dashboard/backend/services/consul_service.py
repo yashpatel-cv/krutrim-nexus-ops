@@ -14,9 +14,19 @@ class ConsulService:
     """Service for interacting with Consul"""
     
     def __init__(self, host: str = "localhost", port: int = 8500):
-        self.consul = consul.Consul(host=host, port=port)
-        self.host = host
-        self.port = port
+        try:
+            self.consul = consul.Consul(host=host, port=port)
+            self.host = host
+            self.port = port
+            # Test connection
+            self.consul.agent.self()
+            logger.info(f"Connected to Consul at {host}:{port}")
+        except Exception as e:
+            logger.error(f"Failed to connect to Consul at {host}:{port}: {e}")
+            # Create a stub consul object to prevent crashes
+            self.consul = consul.Consul(host=host, port=port)
+            self.host = host
+            self.port = port
         
     def get_all_nodes(self) -> List[Dict]:
         """Get all nodes in the cluster"""
