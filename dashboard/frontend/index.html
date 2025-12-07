@@ -3,58 +3,59 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>[KRUTRIM]NEXUS-OPS | Distributed Systems Management</title>
-    <link rel="stylesheet" href="/static/css/dashboard.css">
-    <link rel="stylesheet" href="/static/css/performance.css">
+    <title>Nexus Ops Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/modern.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
-    <!-- Header -->
-    <header class="dashboard-header">
-        <div class="header-left">
-            <h1 class="logo">[KRUTRIM]<span class="accent">NEXUS-OPS</span></h1>
-            <p class="subtitle">Distributed Systems Management</p>
+    <!-- Top Bar -->
+    <header class="topbar">
+        <div class="topbar-left">
+            <h1 class="brand">Nexus Ops</h1>
+            <span class="status-dot" id="connection-dot"></span>
+            <span class="connection-text" id="connection-status">Disconnected</span>
         </div>
-        <div class="header-center">
-            <div class="progress-counter">
-                <span class="label">Active:</span>
-                <span id="active-count" class="count">0/0</span>
-                <span class="label-sub">Workers</span>
-            </div>
-        </div>
-        <div class="header-right">
-            <button class="btn btn-secondary" onclick="refreshDashboard()">
-                <span class="icon">⟳</span> Refresh
+        <div class="topbar-right">
+            <button class="btn-icon" onclick="refreshDashboard()" title="Refresh">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+                </svg>
             </button>
-            <button class="btn btn-primary" onclick="toggleRealtime()">
-                <span class="icon">●</span> <span id="realtime-status">Connect</span>
+            <button class="btn-toggle" onclick="toggleRealtime()" id="realtime-btn">
+                <span id="realtime-status">Connect Live</span>
             </button>
         </div>
     </header>
 
-    <!-- Filter Bar -->
-    <div class="filter-bar">
-        <div class="filter-group">
-            <span class="filter-label">filter_by_status:</span>
-            <button class="filter-btn active" data-filter="status" data-value="all">ALL</button>
-            <button class="filter-btn" data-filter="status" data-value="healthy">HEALTHY</button>
-            <button class="filter-btn" data-filter="status" data-value="degraded">DEGRADED</button>
-            <button class="filter-btn" data-filter="status" data-value="failed">FAILED</button>
+    <!-- Filters -->
+    <div class="filters">
+        <div class="filter-section">
+            <label>Status</label>
+            <div class="filter-buttons">
+                <button class="filter-chip active" data-filter="status" data-value="all">All</button>
+                <button class="filter-chip" data-filter="status" data-value="healthy">Healthy</button>
+                <button class="filter-chip" data-filter="status" data-value="degraded">Degraded</button>
+                <button class="filter-chip" data-filter="status" data-value="failed">Failed</button>
+            </div>
         </div>
-        <div class="filter-group">
-            <span class="filter-label">filter_by_type:</span>
-            <button class="filter-btn active" data-filter="type" data-value="all">ALL</button>
-            <button class="filter-btn" data-filter="type" data-value="manager">MANAGER</button>
-            <button class="filter-btn" data-filter="type" data-value="worker">WORKER</button>
-            <button class="filter-btn" data-filter="type" data-value="loadbalancer">LOADBALANCER</button>
+        <div class="filter-section">
+            <label>Type</label>
+            <div class="filter-buttons">
+                <button class="filter-chip active" data-filter="type" data-value="all">All</button>
+                <button class="filter-chip" data-filter="type" data-value="manager">Managers</button>
+                <button class="filter-chip" data-filter="type" data-value="worker">Workers</button>
+            </div>
         </div>
     </div>
 
     <!-- Main Dashboard -->
     <main class="dashboard-main">
-        <!-- Overview Panel -->
-        <section class="overview-panel">
-            <h2 class="section-title">/cluster/overview</h2>
+        <!-- Overview Cards -->
+        <section class="section">
+            <h2 class="section-heading">Cluster Overview</h2>
             <div class="overview-grid">
                 <div class="overview-card">
                     <div class="card-header">
@@ -111,25 +112,25 @@
             </div>
         </section>
 
-        <!-- Manager Grid -->
-        <section class="node-section">
-            <h2 class="section-title">/managers</h2>
+        <!-- Managers -->
+        <section class="section">
+            <h2 class="section-heading">Managers</h2>
             <div id="managers-grid" class="node-grid">
                 <!-- Manager cards will be inserted here -->
             </div>
         </section>
 
-        <!-- Worker Grid -->
-        <section class="node-section">
-            <h2 class="section-title">/workers</h2>
+        <!-- Workers -->
+        <section class="section">
+            <h2 class="section-heading">Workers</h2>
             <div id="workers-grid" class="node-grid">
                 <!-- Worker cards will be inserted here -->
             </div>
         </section>
 
-        <!-- Analytics Section -->
-        <section class="analytics-section">
-            <h2 class="section-title">/analytics/performance</h2>
+        <!-- Performance Metrics -->
+        <section class="section">
+            <h2 class="section-heading">Performance (24h)</h2>
             <div class="charts-grid">
                 <div class="chart-container">
                     <h3 class="chart-title">CPU Utilization (24h)</h3>
@@ -146,31 +147,24 @@
             </div>
         </section>
 
-        <!-- Logs Terminal -->
-        <section class="logs-section">
-            <h2 class="section-title">/logs/realtime</h2>
-            <div class="terminal">
-                <div class="terminal-header">
-                    <span>System Logs</span>
-                    <button class="btn-small" onclick="clearLogs()">Clear</button>
-                </div>
-                <div id="logs-content" class="terminal-content">
-                    <div class="log-line">[INFO] Dashboard initialized</div>
+        <!-- Activity Log -->
+        <section class="section">
+            <div class="section-header">
+                <h2 class="section-heading">Activity Log</h2>
+                <button class="btn-text" onclick="clearLogs()">Clear</button>
+            </div>
+            <div class="log-panel">
+                <div id="logs-content" class="log-content">
+                    <div class="log-entry info">Dashboard initialized</div>
                 </div>
             </div>
         </section>
     </main>
 
     <!-- Footer -->
-    <footer class="dashboard-footer">
-        <div class="footer-left">
-            <span>Krutrim Nexus Ops v1.0.0</span>
-            <span class="separator">|</span>
-            <span id="connection-status">Disconnected</span>
-        </div>
-        <div class="footer-right">
-            <span>Last Update: <span id="last-update">--</span></span>
-        </div>
+    <footer class="footer">
+        <span>Last updated: <span id="last-update">--</span></span>
+        <span>Nexus Ops v1.0.0</span>
     </footer>
 
     <!-- Scripts -->

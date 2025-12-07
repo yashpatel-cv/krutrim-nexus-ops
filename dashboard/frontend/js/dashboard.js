@@ -33,7 +33,7 @@ function showLoadingState() {
 
 // Setup filter button handlers
 function setupFilterButtons() {
-    document.querySelectorAll('.filter-btn').forEach(btn => {
+    document.querySelectorAll('.filter-chip').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const filterType = e.target.dataset.filter;
             const filterValue = e.target.dataset.value;
@@ -299,14 +299,14 @@ function addLog(level, message) {
     if (!logsContent) return;
     
     const timestamp = new Date().toLocaleTimeString();
-    const logLine = document.createElement('div');
-    logLine.className = `log-line ${level}`;
-    logLine.textContent = `[${timestamp}] [${level.toUpperCase()}] ${message}`;
+    const logEntry = document.createElement('div');
+    logEntry.className = `log-entry ${level}`;
+    logEntry.textContent = `[${timestamp}] ${message}`;
     
-    logsContent.appendChild(logLine);
+    logsContent.appendChild(logEntry);
     
-    // Limit log lines to prevent memory issues
-    const maxLogs = 100;
+    // Limit log entries to 50 to prevent infinite growth
+    const maxLogs = 50;
     while (logsContent.children.length > maxLogs) {
         logsContent.removeChild(logsContent.firstChild);
     }
@@ -329,7 +329,7 @@ function debouncedLog(level, message) {
 }
 
 function clearLogs() {
-    document.getElementById('logs-content').innerHTML = '<div class="log-line">[INFO] Logs cleared</div>';
+    document.getElementById('logs-content').innerHTML = '<div class="log-entry info">Logs cleared</div>';
 }
 
 function refreshDashboard() {

@@ -62,12 +62,13 @@ function connectWebSocket() {
 function updateConnectionStatus(text, connected) {
     const statusEl = document.getElementById('realtime-status');
     const connEl = document.getElementById('connection-status');
+    const dotEl = document.getElementById('connection-dot');
+    const btnEl = document.getElementById('realtime-btn');
     
-    if (statusEl) statusEl.textContent = connected ? 'Connected' : 'Connect';
-    if (connEl) {
-        connEl.textContent = text;
-        connEl.classList.toggle('connected', connected);
-    }
+    if (statusEl) statusEl.textContent = connected ? 'Disconnect' : 'Connect Live';
+    if (connEl) connEl.textContent = text;
+    if (dotEl) dotEl.classList.toggle('connected', connected);
+    if (btnEl) btnEl.classList.toggle('active', connected);
 }
 
 function disconnectWebSocket() {
