@@ -1,0 +1,152 @@
+/* Performance Optimizations for Smooth UI */
+
+/* Hardware acceleration for animated elements */
+.node-card,
+.metric-bar-fill,
+.status-badge,
+.btn,
+.filter-btn {
+    will-change: transform, opacity;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+}
+
+/* Smooth transitions */
+.node-card {
+    transition: transform var(--transition-fast), 
+                box-shadow var(--transition-fast),
+                opacity var(--transition-fast);
+}
+
+.node-card:hover {
+    transform: translateY(-2px) translateZ(0);
+}
+
+/* Metric bar animations */
+.metric-bar-fill {
+    transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Loading states */
+.loading-skeleton {
+    background: linear-gradient(
+        90deg,
+        var(--bg-tertiary) 25%,
+        var(--bg-secondary) 50%,
+        var(--bg-tertiary) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    padding: var(--spacing-xl);
+    border-radius: 8px;
+    text-align: center;
+    color: var(--text-secondary);
+}
+
+@keyframes shimmer {
+    0% {
+        background-position: -200% 0;
+    }
+    100% {
+        background-position: 200% 0;
+    }
+}
+
+/* Empty & Error states */
+.empty-state,
+.error-state {
+    padding: var(--spacing-xl);
+    text-align: center;
+    color: var(--text-secondary);
+    background-color: var(--bg-secondary);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+.error-state {
+    border-color: var(--status-error);
+    color: var(--status-error);
+}
+
+/* Update flash animation */
+.updated {
+    animation: flash 0.3s ease-out;
+}
+
+@keyframes flash {
+    0%, 100% {
+        background-color: transparent;
+    }
+    50% {
+        background-color: rgba(0, 255, 65, 0.2);
+    }
+}
+
+/* Reduce motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* Optimize scroll performance */
+.logs-content,
+.managers-grid,
+.workers-grid {
+    contain: layout style paint;
+    will-change: scroll-position;
+}
+
+/* GPU acceleration for filters */
+.filter-btn.active {
+    transform: scale(1.05) translateZ(0);
+    box-shadow: 0 0 15px var(--accent-green);
+}
+
+/* Smooth opacity transitions */
+.node-card[style*="display: none"] {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.node-card[style*="display: block"] {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* Optimize status badge transitions */
+.status-badge {
+    transition: background-color var(--transition-fast),
+                color var(--transition-fast),
+                transform var(--transition-fast);
+}
+
+/* Connection status pulse */
+.connected {
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.7;
+    }
+}
+
+/* Button interactions */
+.btn:active,
+.btn-small:active {
+    transform: scale(0.95) translateZ(0);
+}
+
+/* Chart container optimization */
+canvas {
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+}

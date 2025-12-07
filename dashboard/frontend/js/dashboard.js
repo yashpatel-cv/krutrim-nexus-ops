@@ -2,20 +2,34 @@
 
 const API_BASE = window.location.origin;
 let currentFilters = { status: 'all', type: 'all' };
+let isLoading = false;
+let loadQueue = [];
 
 // Initialize dashboard
 document.addEventListener('DOMContentLoaded', () => {
     console.log('[Dashboard] Initializing...');
     setupFilterButtons();
+    showLoadingState();
     loadDashboardData();
     
     // Refresh every 30 seconds if not using WebSocket
     setInterval(() => {
-        if (!window.wsConnected) {
+        if (!window.wsConnected && !isLoading) {
             loadDashboardData();
         }
     }, 30000);
 });
+
+// Show loading state
+function showLoadingState() {
+    const grids = ['managers-grid', 'workers-grid'];
+    grids.forEach(id => {
+        const grid = document.getElementById(id);
+        if (grid) {
+            grid.innerHTML = '<div class="loading-skeleton">Loading...</div>';
+        }
+    });
+}
 
 // Setup filter button handlers
 function setupFilterButtons() {
@@ -39,6 +53,12 @@ function setupFilterButtons() {
 
 // Load all dashboard data
 async function loadDashboardData() {
+    if (isLoading) {
+        console.log('[Dashboard] Load already in progress, skipping');
+        return;
+    }
+    
+    isLoading = true;
     try {
         await Promise.all([
             loadOverview(),
@@ -47,10 +67,12 @@ async function loadDashboardData() {
         ]);
         
         updateLastUpdateTime();
-        addLog('info', 'Dashboard data refreshed');
+        debouncedLog('info', 'Dashboard data refreshed');
     } catch (error) {
         console.error('[Dashboard] Load error:', error);
-        addLog('error', `Failed to load data: ${error.message}`);
+        debouncedLog('error', `Failed to load data: ${error.message}`);
+    } finally {
+        isLoading = false;
     }
 }
 
@@ -87,13 +109,30 @@ async function loadOverview() {
 async function loadManagers() {
     try {
         const response = await fetch(`${API_BASE}/api/managers/`);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const managers = await response.json();
         
         const grid = document.getElementById('managers-grid');
-        grid.innerHTML = managers.map(m => createManagerCard(m)).join('');
+        if (!managers || managers.length === 0) {
+            grid.innerHTML = '<div class="empty-state">No managers found</div>';
+            return;
+        }
+        
+        // Use DocumentFragment for better performance
+        const fragment = document.createDocumentFragment();
+        managers.forEach(m => {
+            const div = document.createElement('div');
+            div.innerHTML = createManagerCard(m);
+            fragment.appendChild(div.firstElementChild);
+        });
+        
+        grid.innerHTML = '';
+        grid.appendChild(fragment);
         
     } catch (error) {
         console.error('[Dashboard] Managers error:', error);
+        document.getElementById('managers-grid').innerHTML = 
+            '<div class="error-state">Failed to load managers</div>';
     }
 }
 
@@ -101,14 +140,32 @@ async function loadManagers() {
 async function loadWorkers() {
     try {
         const response = await fetch(`${API_BASE}/api/workers/`);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const workers = await response.json();
         
         const grid = document.getElementById('workers-grid');
-        grid.innerHTML = workers.map(w => createWorkerCard(w)).join('');
+        if (!workers || workers.length === 0) {
+            grid.innerHTML = '<div class="empty-state">No workers found</div>';
+            return;
+        }
         
-        applyFilters();
+        // Use DocumentFragment for better performance
+        const fragment = document.createDocumentFragment();
+        workers.forEach(w => {
+            const div = document.createElement('div');
+            div.innerHTML = createWorkerCard(w);
+            fragment.appendChild(div.firstElementChild);
+        });
+        
+        grid.innerHTML = '';
+        grid.appendChild(fragment);
+        
+        // Apply filters after DOM is updated
+        requestAnimationFrame(() => applyFilters());
     } catch (error) {
         console.error('[Dashboard] Workers error:', error);
+        document.getElementById('workers-grid').innerHTML = 
+            '<div class="error-state">Failed to load workers</div>';
     }
 }
 
@@ -233,14 +290,42 @@ function updateLastUpdateTime() {
     document.getElementById('last-update').textContent = now.toLocaleTimeString();
 }
 
+// Debounced log function to prevent excessive DOM updates
+let logQueue = [];
+let logTimer = null;
+
 function addLog(level, message) {
     const logsContent = document.getElementById('logs-content');
+    if (!logsContent) return;
+    
     const timestamp = new Date().toLocaleTimeString();
     const logLine = document.createElement('div');
     logLine.className = `log-line ${level}`;
     logLine.textContent = `[${timestamp}] [${level.toUpperCase()}] ${message}`;
+    
     logsContent.appendChild(logLine);
-    logsContent.scrollTop = logsContent.scrollHeight;
+    
+    // Limit log lines to prevent memory issues
+    const maxLogs = 100;
+    while (logsContent.children.length > maxLogs) {
+        logsContent.removeChild(logsContent.firstChild);
+    }
+    
+    // Smooth scroll to bottom
+    requestAnimationFrame(() => {
+        logsContent.scrollTop = logsContent.scrollHeight;
+    });
+}
+
+function debouncedLog(level, message) {
+    logQueue.push({ level, message });
+    
+    if (logTimer) clearTimeout(logTimer);
+    
+    logTimer = setTimeout(() => {
+        logQueue.forEach(({ level, message }) => addLog(level, message));
+        logQueue = [];
+    }, 100);
 }
 
 function clearLogs() {
