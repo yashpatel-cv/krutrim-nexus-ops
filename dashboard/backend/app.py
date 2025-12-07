@@ -90,7 +90,10 @@ app.include_router(analytics_router)
 app.include_router(health_router)
 
 # Mount static files (frontend) with validation
-frontend_path = Path(__file__).parent.parent / settings.frontend_path
+frontend_path = Path(settings.frontend_path)
+if not frontend_path.is_absolute():
+    # Make relative to backend working directory (systemd WorkingDirectory)
+    frontend_path = Path.cwd() / frontend_path
 if frontend_path.exists():
     try:
         app.mount("/static", StaticFiles(directory=str(frontend_path)), name="static")
@@ -144,7 +147,11 @@ async def api_root():
 @app.get("/", response_class=FileResponse)
 async def serve_frontend():
     """Serve the frontend dashboard HTML"""
-    frontend_html = Path(__file__).parent.parent / settings.frontend_path / "index.html"
+    frontend_dir = Path(settings.frontend_path)
+    if not frontend_dir.is_absolute():
+        # Make relative to backend working directory (systemd WorkingDirectory)
+        frontend_dir = Path.cwd() / frontend_dir
+    frontend_html = frontend_dir / "index.html"
     if frontend_html.exists():
         return FileResponse(str(frontend_html))
     return JSONResponse(
