@@ -11,22 +11,65 @@ logger = logging.getLogger(__name__)
 
 
 class ConsulService:
-    """Service for interacting with Consul"""
+    """Service for interacting with Consul with comprehensive error handling"""
     
-    def __init__(self, host: str = "localhost", port: int = 8500):
+    def __init__(self, host: str = "localhost", port: int = 8500, token: Optional[str] = None, scheme: str = "http", timeout: int = 10):
+        """
+        Initialize Consul service with validation
+        
+        Args:
+            host: Consul host (cannot be 0.0.0.0 for client)
+            port: Consul port
+            token: Optional ACL token
+            scheme: http or https
+            timeout: Connection timeout in seconds
+        """
+        # Validate inputs
+        if not host or host.strip() == "":
+            raise ValueError("Consul host cannot be empty")
+        if host == "0.0.0.0":
+            raise ValueError("Consul host cannot be 0.0.0.0 (use localhost or specific IP)")
+        if not 1 <= port <= 65535:
+            raise ValueError(f"Invalid port: {port}. Must be between 1 and 65535")
+        if scheme not in ["http", "https"]:
+            raise ValueError(f"Invalid scheme: {scheme}. Must be 'http' or 'https'")
+        
+        self.host = host.strip()
+        self.port = port
+        self.token = token
+        self.scheme = scheme
+        self.timeout = timeout
+        self._connected = False
+        
         try:
-            self.consul = consul.Consul(host=host, port=port)
-            self.host = host
-            self.port = port
+            # Create Consul client with timeout
+            self.consul = consul.Consul(
+                host=self.host,
+                port=self.port,
+                token=self.token,
+                scheme=self.scheme,
+                timeout=self.timeout
+            )
+            
             # Test connection
             self.consul.agent.self()
-            logger.info(f"Connected to Consul at {host}:{port}")
+            self._connected = True
+            logger.info(f"Connected to Consul at {self.scheme}://{self.host}:{self.port}")
         except Exception as e:
-            logger.error(f"Failed to connect to Consul at {host}:{port}: {e}")
+            logger.error(f"Failed to connect to Consul at {self.scheme}://{self.host}:{self.port}: {e}")
+            logger.warning("Consul service will operate in degraded mode")
             # Create a stub consul object to prevent crashes
-            self.consul = consul.Consul(host=host, port=port)
-            self.host = host
-            self.port = port
+            self.consul = consul.Consul(
+                host=self.host,
+                port=self.port,
+                token=self.token,
+                scheme=self.scheme
+            )
+            self._connected = False
+    
+    def is_connected(self) -> bool:
+        """Check if connected to Consul"""
+        return self._connected
         
     def get_all_nodes(self) -> List[Dict]:
         """Get all nodes in the cluster"""

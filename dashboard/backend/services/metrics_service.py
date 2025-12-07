@@ -23,40 +23,68 @@ class MetricsService:
         self.network_history = deque(maxlen=history_size)
         
     def collect_system_metrics(self) -> Dict:
-        """Collect current system metrics"""
+        """Collect current system metrics with comprehensive error handling"""
+        metrics = {
+            'cpu_usage': 0.0,
+            'memory_usage': 0.0,
+            'disk_usage': 0.0,
+            'network_in': 0.0,
+            'network_out': 0.0,
+            'timestamp': datetime.utcnow()
+        }
+        
         try:
-            cpu_percent = psutil.cpu_percent(interval=1)
-            memory = psutil.virtual_memory()
-            disk = psutil.disk_usage('/')
-            network = psutil.net_io_counters()
+            # CPU with timeout
+            try:
+                cpu_percent = psutil.cpu_percent(interval=1)
+                metrics['cpu_usage'] = round(cpu_percent, 2)
+            except Exception as e:
+                logger.warning(f"Failed to collect CPU metrics: {e}")
             
-            metrics = {
-                'cpu_usage': cpu_percent,
-                'memory_usage': memory.percent,
-                'disk_usage': disk.percent,
-                'network_in': network.bytes_recv / (1024 * 1024),  # MB
-                'network_out': network.bytes_sent / (1024 * 1024),  # MB
-                'timestamp': datetime.utcnow()
-            }
+            # Memory
+            try:
+                memory = psutil.virtual_memory()
+                metrics['memory_usage'] = round(memory.percent, 2)
+            except Exception as e:
+                logger.warning(f"Failed to collect memory metrics: {e}")
+            
+            # Disk (handle missing mount points)
+            try:
+                disk = psutil.disk_usage('/')
+                metrics['disk_usage'] = round(disk.percent, 2)
+            except (OSError, PermissionError) as e:
+                logger.warning(f"Failed to collect disk metrics: {e}")
+            
+            # Network
+            try:
+                network = psutil.net_io_counters()
+                metrics['network_in'] = round(network.bytes_recv / (1024 * 1024), 2)  # MB
+                metrics['network_out'] = round(network.bytes_sent / (1024 * 1024), 2)  # MB
+            except Exception as e:
+                logger.warning(f"Failed to collect network metrics: {e}")
             
             # Add to history
-            self.cpu_history.append(TimeSeriesDataPoint(
-                timestamp=metrics['timestamp'],
-                value=metrics['cpu_usage']
-            ))
-            self.memory_history.append(TimeSeriesDataPoint(
-                timestamp=metrics['timestamp'],
-                value=metrics['memory_usage']
-            ))
-            self.network_history.append(TimeSeriesDataPoint(
-                timestamp=metrics['timestamp'],
-                value=metrics['network_in'] + metrics['network_out']
-            ))
+            try:
+                self.cpu_history.append(TimeSeriesDataPoint(
+                    timestamp=metrics['timestamp'],
+                    value=metrics['cpu_usage']
+                ))
+                self.memory_history.append(TimeSeriesDataPoint(
+                    timestamp=metrics['timestamp'],
+                    value=metrics['memory_usage']
+                ))
+                self.network_history.append(TimeSeriesDataPoint(
+                    timestamp=metrics['timestamp'],
+                    value=metrics['network_in'] + metrics['network_out']
+                ))
+            except Exception as e:
+                logger.warning(f"Failed to add metrics to history: {e}")
             
             return metrics
+            
         except Exception as e:
-            logger.error(f"Failed to collect system metrics: {e}")
-            return {}
+            logger.error(f"Unexpected error collecting system metrics: {e}", exc_info=True)
+            return metrics  # Return partial metrics instead of empty dict
     
     def get_uptime(self) -> int:
         """Get system uptime in seconds"""

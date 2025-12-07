@@ -1,11 +1,27 @@
-fastapi>=0.115.0
-uvicorn[standard]>=0.30.0
-python-consul>=1.1.0
-pydantic>=2.9.0
-pydantic-settings>=2.5.0
-python-jose[cryptography]>=3.3.0
-passlib[bcrypt]>=1.7.4
-python-multipart>=0.0.6
-websockets>=12.0
-aiofiles>=23.2.1
-psutil>=6.1.0
+# Core Framework - FastAPI LTS versions
+fastapi==0.115.5           # Latest stable FastAPI
+uvicorn[standard]==0.32.1  # Production ASGI server with extras
+python-multipart==0.0.17   # File upload support
+
+# Service Discovery
+python-consul==1.1.0       # Consul client
+
+# Data Validation & Settings
+pydantic==2.10.3           # Data validation with Python 3.13 support
+pydantic-settings==2.7.0   # Settings management
+
+# Async & WebSockets
+websockets==14.1           # WebSocket support
+aiofiles==24.1.0           # Async file operations
+
+# System Metrics
+psutil==6.1.0              # System and process utilities
+
+# Optional Security (commented out - add if needed)
+# python-jose[cryptography]==3.3.0  # JWT tokens
+# passlib[bcrypt]==1.7.4            # Password hashing
+
+# Development/Testing (install separately)
+# pytest==8.3.4
+# pytest-asyncio==0.24.0
+# httpx==0.28.1              # Testing client
