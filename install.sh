@@ -756,6 +756,10 @@ setup_manager() {
         [ -f "$f" ] && cp "$f" "$NEXUS_HOME/" || warn "$f not found, skipping"
     done
     
+    # Make scripts executable
+    chmod +x "$NEXUS_HOME"/*.sh 2>/dev/null || true
+    chmod +x "$NEXUS_HOME"/*.py 2>/dev/null || true
+    
     # Copy config files
     for f in config/*.conf config/*.service config/torrc; do
         [ -f "$f" ] && cp "$f" "$NEXUS_HOME/" || true
@@ -832,6 +836,10 @@ setup_worker() {
     for f in run-services.sh services.py proc_ipc.py services.yml; do
         [ -f "$f" ] && cp "$f" "$NEXUS_HOME/" || warn "$f not found"
     done
+    
+    # Make scripts executable
+    chmod +x "$NEXUS_HOME"/*.sh 2>/dev/null || true
+    chmod +x "$NEXUS_HOME"/*.py 2>/dev/null || true
     
     # Create worker agent
     cat > /etc/systemd/system/nexus-worker.service <<EOF
