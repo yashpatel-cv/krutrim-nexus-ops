@@ -36,7 +36,8 @@ class Settings(BaseSettings):
     
     # Metrics
     metrics_history_size: int = Field(default=288, ge=10, le=1000, description="Metrics history size (24h at 5min intervals)")
-    metrics_collection_interval: int = Field(default=5, ge=1, le=60, description="Metrics collection interval seconds")
+    # Slightly slower default collection interval for better performance on small VMs
+    metrics_collection_interval: int = Field(default=10, ge=1, le=60, description="Metrics collection interval seconds")
     
     # Logging
     log_level: str = Field(default="INFO", pattern="^(DEBUG|INFO|WARNING|ERROR|CRITICAL)$")

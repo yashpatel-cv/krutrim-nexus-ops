@@ -890,31 +890,17 @@ setup_loadbalancer() {
         fi
     fi
     
-    # Create Caddyfile with HA configuration
+    # Create Caddyfile with HTTPS termination for dashboard and Consul
     cat > /etc/caddy/Caddyfile <<EOF
 {
     email admin@${DOMAIN}
     admin off
 }
 
-# Main domain with load balancing
+# Main dashboard over HTTPS (automatic Let's Encrypt via Caddy)
 ${DOMAIN} {
-    reverse_proxy {
-        # Dynamic upstream from Consul
-        # Add worker IPs here
-        to localhost:8080 localhost:8081 localhost:8082
-        
-        lb_policy least_conn
-        lb_try_duration 10s
-        lb_try_interval 1s
-        
-        health_uri /health
-        health_interval 10s
-        health_timeout 5s
-        
-        fail_duration 30s
-    }
-    
+    reverse_proxy 127.0.0.1:9000
+
     # Security headers
     header {
         Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
@@ -922,16 +908,16 @@ ${DOMAIN} {
         X-Frame-Options "DENY"
         X-XSS-Protection "1; mode=block"
     }
-    
+
     # Logging
     log {
         output file /var/log/caddy/access.log
     }
 }
 
-# Consul UI
-:8500 {
-    reverse_proxy localhost:8500
+# Consul UI on a subdomain
+consul.${DOMAIN} {
+    reverse_proxy 127.0.0.1:8500
 }
 EOF
 
