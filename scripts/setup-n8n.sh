@@ -1,124 +1,127 @@
-#!/usr/bin/env bash
-# setup-n8n.sh - n8n Automation Platform Setup
-# Integrates with Krutrim Nexus Ops infrastructure
+#!/bin/bash
+# n8n Automation Platform Setup - Krutrim Nexus Integration
+# Compatible with existing Oracle Cloud ARM64 infrastructure
 
-set -Eeuo pipefail
+set -e
 
 # Colors
+RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-RED='\033[0;31m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-log() { echo -e "${GREEN}[$(date +'%H:%M:%S')]${NC} $*"; }
-warn() { echo -e "${YELLOW}[WARNING]${NC} $*"; }
-err() { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
-
-# Configuration
+# Constants
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 N8N_HOME="/opt/n8n-automation"
-NEXUS_HOME="/opt/nexus"
+LOG_FILE="${N8N_HOME}/install.log"
 
-echo -e "${BLUE}"
-cat << 'EOF'
-╔══════════════════════════════════════════════╗
-║      n8n Automation Platform Setup           ║
-║      Nexus Ops Integration                   ║
-╚══════════════════════════════════════════════╝
+# Helper functions
+log() {
+    echo -e "${GREEN}[$(date +'%Y-%m-%d %H:%M:%S')]${NC} $1"
+    echo "[$(date +'%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE" 2>/dev/null || true
+}
+
+error() {
+    echo -e "${RED}[ERROR]${NC} $1" >&2
+    echo "[ERROR] $1" >> "$LOG_FILE" 2>/dev/null || true
+}
+
+warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1"
+    echo "[WARNING] $1" >> "$LOG_FILE" 2>/dev/null || true
+}
+
+check_root() {
+    if [[ $EUID -eq 0 ]]; then
+        error "This script should NOT be run as root"
+        exit 1
+    fi
+}
+
+banner() {
+    clear
+    cat << "EOF"
+╔═══════════════════════════════════════════════════════════╗
+║                                                           ║
+║          n8n Automation Platform Setup                   ║
+║          Krutrim Nexus Ops Integration                   ║
+║                                                           ║
+╚═══════════════════════════════════════════════════════════╝
 EOF
-echo -e "${NC}"
+}
 
-# Check root
-if [ "$EUID" -ne 0 ]; then
-    err "This script must be run as root (use sudo)"
-fi
-
-# Detect environment
-PRIVATE_IP="$(hostname -I | awk '{print $1}')"
-if [ -z "$PRIVATE_IP" ]; then
-    PRIVATE_IP="$(ip route get 1 2>/dev/null | awk '{print $7; exit}')"
-fi
-
-# Detect domain
-DETECTED_DOMAIN="krutrimseva.cbu.net"
-if [ -f "$NEXUS_HOME/cluster.yml" ]; then
-    DETECTED_DOMAIN=$(grep '^domain:' "$NEXUS_HOME/cluster.yml" | awk '{print $2}' || echo "$DETECTED_DOMAIN")
-fi
-
-DOMAIN="${DETECTED_DOMAIN}"
-
-log "Environment detected:"
-log "  IP: $PRIVATE_IP"
-log "  Domain: $DOMAIN"
-
-# ============================================================
-# STEP 1: Pre-flight Checks
-# ============================================================
-
-log "Running pre-flight checks..."
-
-# Check Docker
-if ! command -v docker &> /dev/null; then
-    err "Docker not found. Install via: make install"
-fi
-
-if ! command -v docker-compose &> /dev/null; then
-    log "Installing Docker Compose..."
-    ARCH="$(uname -m)"
-    if [ "$ARCH" = "aarch64" ]; then
-        curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-aarch64" \
+# Main installation
+main() {
+    banner
+    check_root
+    
+    log "Starting n8n setup..."
+    
+    # Create directories
+    sudo mkdir -p "$N8N_HOME"/{workflows,backups,data,credentials} || error "Failed to create directories"
+    sudo chown -R "$USER:$USER" "$N8N_HOME"
+    touch "$LOG_FILE"
+    
+    # Step 1: Check prerequisites
+    log "Step 1/8: Checking prerequisites..."
+    
+    if ! command -v docker &> /dev/null; then
+        error "Docker not found. Install via: make install"
+        exit 1
+    fi
+    log "✓ Docker found: $(docker --version | cut -d' ' -f3)"
+    
+    if ! command -v docker-compose &> /dev/null; then
+        log "Installing Docker Compose for ARM64..."
+        sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-$(uname -m)" \
             -o /usr/local/bin/docker-compose
+        sudo chmod +x /usr/local/bin/docker-compose
+    fi
+    log "✓ Docker Compose: $(docker-compose --version | cut -d' ' -f4)"
+    
+    # Step 2: Find available port
+    log "Step 2/8: Finding available port..."
+    
+    N8N_PORT=""
+    USED_PORTS=$(sudo ss -tulpn | grep LISTEN | awk '{print $5}' | cut -d: -f2 | sort -u)
+    
+    for PORT in 5678 5679 8080 8081 3000 3001 8088; do
+        if ! echo "$USED_PORTS" | grep -q "^$PORT$"; then
+            N8N_PORT=$PORT
+            log "✓ Found available port: $N8N_PORT"
+            break
+        fi
+    done
+    
+    if [ -z "$N8N_PORT" ]; then
+        error "No available ports found"
+        exit 1
+    fi
+    
+    # Step 3: Generate credentials
+    log "Step 3/8: Generating secure credentials..."
+    
+    N8N_PASSWORD=$(openssl rand -base64 16)
+    WEBHOOK_SECRET=$(openssl rand -hex 32)
+    
+    log "✓ Credentials generated"
+    
+    # Step 4: Create Docker network
+    log "Step 4/8: Configuring Docker network..."
+    
+    if ! docker network ls | grep -q "nexus-network"; then
+        docker network create nexus-network
+        log "✓ Created nexus-network"
     else
-        curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64" \
-            -o /usr/local/bin/docker-compose
+        log "✓ nexus-network already exists"
     fi
-    chmod +x /usr/local/bin/docker-compose
-fi
-
-# Check Consul
-if ! systemctl is-active --quiet consul; then
-    warn "Consul not running. Some features may be limited."
-fi
-
-# Find available port
-log "Finding available port..."
-EXISTING_PORTS=$(ss -tulpn 2>/dev/null | grep LISTEN | awk '{print $5}' | cut -d: -f2 | sort -u)
-N8N_PORT=""
-for PORT in 5678 5679 8080 8081 3000 3001; do
-    if ! echo "$EXISTING_PORTS" | grep -q "^$PORT$"; then
-        N8N_PORT=$PORT
-        log "Using port: $N8N_PORT"
-        break
-    fi
-done
-
-if [ -z "$N8N_PORT" ]; then
-    err "No available ports found"
-fi
-
-# ============================================================
-# STEP 2: Create Directory Structure
-# ============================================================
-
-log "Setting up directory structure..."
-mkdir -p "$N8N_HOME"/{workflows,backups,data,credentials}
-chown -R $SUDO_USER:$SUDO_USER "$N8N_HOME" 2>/dev/null || true
-
-# ============================================================
-# STEP 3: Generate Secure Credentials
-# ============================================================
-
-log "Generating secure credentials..."
-N8N_PASSWORD=$(openssl rand -base64 16)
-WEBHOOK_SECRET=$(openssl rand -hex 32)
-
-# ============================================================
-# STEP 4: Create Docker Compose
-# ============================================================
-
-log "Creating Docker Compose configuration..."
-
-cat > "$N8N_HOME/docker-compose.yml" <<EOF
+    
+    # Step 5: Create Docker Compose
+    log "Step 5/8: Creating Docker Compose configuration..."
+    
+    cat > "${N8N_HOME}/docker-compose.yml" <<EOF
 version: '3.8'
 
 services:
@@ -129,10 +132,10 @@ services:
     ports:
       - "127.0.0.1:${N8N_PORT}:5678"
     environment:
-      - N8N_HOST=${DOMAIN}
+      - N8N_HOST=\${N8N_HOST:-localhost}
       - N8N_PORT=5678
-      - N8N_PROTOCOL=https
-      - WEBHOOK_URL=https://${DOMAIN}/n8n/
+      - N8N_PROTOCOL=\${N8N_PROTOCOL:-http}
+      - WEBHOOK_URL=\${WEBHOOK_URL:-http://localhost:${N8N_PORT}/}
       - NODE_ENV=production
       - GENERIC_TIMEZONE=America/Toronto
       - N8N_BASIC_AUTH_ACTIVE=true
@@ -163,114 +166,34 @@ networks:
   nexus-network:
     external: true
 EOF
-
-# ============================================================
-# STEP 5: Configure Docker Network
-# ============================================================
-
-log "Configuring Docker network..."
-
-if ! docker network ls | grep -q "nexus-network"; then
-    docker network create nexus-network
-    log "Created nexus-network"
-else
-    log "nexus-network already exists"
-fi
-
-# ============================================================
-# STEP 6: Configure Caddy Reverse Proxy
-# ============================================================
-
-log "Configuring Caddy reverse proxy..."
-
-mkdir -p /etc/caddy/conf.d/
-
-cat > /etc/caddy/conf.d/n8n.caddy <<EOF
-# n8n Automation Platform
-${DOMAIN}/n8n/* {
-    reverse_proxy localhost:${N8N_PORT} {
-        header_up Host {host}
-        header_up X-Real-IP {remote_host}
-        header_up X-Forwarded-For {remote_host}
-        header_up X-Forwarded-Proto {scheme}
-        
-        # WebSocket support
-        header_up Connection {>Connection}
-        header_up Upgrade {>Upgrade}
-    }
-}
-EOF
-
-log "Caddy configuration created"
-log "Run 'systemctl reload caddy' to apply changes"
-
-# ============================================================
-# STEP 7: Update Firewall (Internal Access Only)
-# ============================================================
-
-log "Configuring firewall..."
-
-# n8n is only accessible via Caddy proxy (internal)
-if [ -f /etc/nftables.conf ]; then
-    if ! grep -q "# n8n automation" /etc/nftables.conf; then
-        # Add rule for internal access only
-        sed -i '/# Allow HTTP\/HTTPS/i\        # n8n automation (internal only)\n        ip saddr 127.0.0.1 tcp dport '"${N8N_PORT}"' accept' /etc/nftables.conf
-        nft -f /etc/nftables.conf 2>/dev/null || warn "Failed to reload nftables"
-    fi
-fi
-
-# ============================================================
-# STEP 8: Start n8n Container
-# ============================================================
-
-log "Starting n8n container..."
-
-cd "$N8N_HOME"
-docker-compose up -d
-
-log "Waiting for n8n to be ready..."
-sleep 15
-
-# ============================================================
-# STEP 9: Register with Consul (if available)
-# ============================================================
-
-if systemctl is-active --quiet consul && command -v consul &>/dev/null; then
-    log "Registering with Consul..."
     
-    curl -X PUT http://localhost:8500/v1/agent/service/register \
-      -H "Content-Type: application/json" \
-      -d '{
-        "ID": "n8n-automation",
-        "Name": "n8n",
-        "Tags": ["automation", "workflows", "orchestration"],
-        "Address": "127.0.0.1",
-        "Port": '"${N8N_PORT}"',
-        "Check": {
-          "HTTP": "http://127.0.0.1:'"${N8N_PORT}"'/healthz",
-          "Interval": "30s",
-          "Timeout": "5s"
-        },
-        "Meta": {
-          "version": "latest",
-          "type": "workflow-automation"
-        }
-      }' 2>/dev/null && log "Registered with Consul" || warn "Consul registration skipped"
-fi
-
-# ============================================================
-# STEP 10: Create Systemd Service
-# ============================================================
-
-log "Creating systemd service..."
-
-cat > /etc/systemd/system/n8n-automation.service <<EOF
+    log "✓ Docker Compose file created"
+    
+    # Step 6: Start n8n
+    log "Step 6/8: Starting n8n container..."
+    
+    cd "$N8N_HOME"
+    docker-compose up -d
+    
+    log "Waiting for n8n to start (30 seconds)..."
+    sleep 30
+    
+    if docker ps | grep -q "n8n-automation"; then
+        log "✓ n8n container running"
+    else
+        error "n8n container failed to start. Check logs: docker-compose logs"
+        exit 1
+    fi
+    
+    # Step 7: Create systemd service
+    log "Step 7/8: Creating systemd service..."
+    
+    sudo tee /etc/systemd/system/n8n-automation.service > /dev/null <<EOF
 [Unit]
-Description=n8n Workflow Automation
+Description=n8n Automation Platform
 Documentation=https://docs.n8n.io
-After=docker.service consul.service
+After=docker.service
 Requires=docker.service
-PartOf=nexus-orchestrator.service
 
 [Service]
 Type=oneshot
@@ -281,9 +204,10 @@ ExecStop=/usr/local/bin/docker-compose down
 ExecReload=/usr/local/bin/docker-compose restart
 Restart=on-failure
 RestartSec=30s
-User=root
+User=${USER}
+Group=${USER}
 
-# Security hardening
+# Security
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
@@ -293,123 +217,119 @@ ReadWritePaths=${N8N_HOME}
 [Install]
 WantedBy=multi-user.target
 EOF
-
-systemctl daemon-reload
-systemctl enable n8n-automation.service
-systemctl start n8n-automation.service
-
-# ============================================================
-# STEP 11: Save Access Information
-# ============================================================
-
-log "Saving access information..."
-
-cat > "${N8N_HOME}/ACCESS_INFO.txt" <<EOF
+    
+    sudo systemctl daemon-reload
+    sudo systemctl enable n8n-automation.service
+    
+    log "✓ Systemd service created"
+    
+    # Step 8: Register with Consul (if available)
+    log "Step 8/8: Registering with Consul..."
+    
+    if command -v consul &> /dev/null; then
+        curl -X PUT http://localhost:8500/v1/agent/service/register \
+          -H "Content-Type: application/json" \
+          -d "{
+            \"ID\": \"n8n-automation\",
+            \"Name\": \"n8n\",
+            \"Tags\": [\"automation\", \"youtube\", \"nexus\"],
+            \"Address\": \"127.0.0.1\",
+            \"Port\": ${N8N_PORT},
+            \"Check\": {
+              \"HTTP\": \"http://127.0.0.1:${N8N_PORT}/healthz\",
+              \"Interval\": \"30s\",
+              \"Timeout\": \"5s\"
+            },
+            \"Meta\": {
+              \"version\": \"latest\",
+              \"type\": \"automation\"
+            }
+          }" 2>/dev/null && log "✓ Registered with Consul" || warning "Consul registration skipped"
+    else
+        warning "Consul not found, skipping registration"
+    fi
+    
+    # Create access info file
+    cat > "${N8N_HOME}/ACCESS_INFO.txt" <<EOF
 ═══════════════════════════════════════════════════════
-  n8n Workflow Automation - Access Information
+  n8n Automation Platform - Access Information
 ═══════════════════════════════════════════════════════
 
-📍 Server: ${PRIVATE_IP} (${DOMAIN})
-🔧 Installation: ${N8N_HOME}
-
-🌐 Access URLs:
-   Public (HTTPS): https://${DOMAIN}/n8n/
-   Local:          http://localhost:${N8N_PORT}
+🌐 Access URL:
+   http://localhost:${N8N_PORT}
 
 👤 Login Credentials:
    Username: admin
    Password: ${N8N_PASSWORD}
 
-🔑 Encryption Key (KEEP SECRET):
+🔑 Encryption Key:
    ${WEBHOOK_SECRET}
 
-📊 Integration:
-   - Registered with Consul: http://localhost:8500
-   - Proxied via Caddy (auto-HTTPS)
-   - Part of Nexus orchestration
+📁 Installation Directory:
+   ${N8N_HOME}
 
 🔧 Management Commands:
-   Status:  systemctl status n8n-automation
+   Status:  sudo systemctl status n8n-automation
    Logs:    docker-compose -f ${N8N_HOME}/docker-compose.yml logs -f
-   Restart: systemctl restart n8n-automation
-   Consul:  consul catalog services | grep n8n
+   Restart: sudo systemctl restart n8n-automation
+   Stop:    docker-compose -f ${N8N_HOME}/docker-compose.yml down
 
-📁 Directory Structure:
-   Workflows: ${N8N_HOME}/workflows
-   Data:      ${N8N_HOME}/data
-   Backups:   ${N8N_HOME}/backups
-
-🔒 Security:
-   - Only accessible via Caddy reverse proxy
-   - Basic authentication enabled
-   - Encrypted credentials storage
-   - Auto-HTTPS via Let's Encrypt
+📊 Monitoring:
+   Container: docker ps | grep n8n
+   Health:    docker inspect n8n-automation | grep -i health
+   Consul:    curl http://localhost:8500/v1/catalog/service/n8n
 
 ═══════════════════════════════════════════════════════
    Installation Date: $(date)
-   Krutrim Nexus Ops Integration
+   Generated by Krutrim Nexus Ops
 ═══════════════════════════════════════════════════════
 EOF
-
-chmod 600 "${N8N_HOME}/ACCESS_INFO.txt"
-
-# ============================================================
-# Final Output
-# ============================================================
-
-clear
-
-cat <<EOF
+    
+    chmod 600 "${N8N_HOME}/ACCESS_INFO.txt"
+    
+    # Final output
+    clear
+    cat << EOF
 
 ${GREEN}╔═══════════════════════════════════════════════════════════╗
 ║                                                           ║
-║     ✓ n8n Workflow Automation Installed!                 ║
+║          ✓ n8n Successfully Installed!                   ║
 ║                                                           ║
 ╚═══════════════════════════════════════════════════════════╝${NC}
 
 ${YELLOW}🌐 Access n8n:${NC}
-   Public:  ${GREEN}https://${DOMAIN}/n8n/${NC}
-   Local:   http://localhost:${N8N_PORT}
-
-${YELLOW}🔑 Login:${NC}
+   URL:      ${GREEN}http://localhost:${N8N_PORT}${NC}
+   
+${YELLOW}🔑 Login Credentials:${NC}
    Username: ${GREEN}admin${NC}
    Password: ${GREEN}${N8N_PASSWORD}${NC}
+   
+${YELLOW}📁 Installation:${NC}
+   Directory: ${N8N_HOME}
+   Config:    ${N8N_HOME}/docker-compose.yml
+   Access:    ${N8N_HOME}/ACCESS_INFO.txt
+   Logs:      ${N8N_HOME}/install.log
 
-${YELLOW}📊 Integration Status:${NC}
-   ✓ Docker container running
-   ✓ Caddy reverse proxy configured
-   ✓ Consul service registered
-   ✓ Systemd service enabled
-   ✓ Nexus orchestration integrated
+${YELLOW}🔧 Quick Commands:${NC}
+   Status:  ${GREEN}make n8n-status${NC}
+   Logs:    ${GREEN}make n8n-logs${NC}
+   Restart: ${GREEN}make n8n-restart${NC}
 
-${YELLOW}📁 Files:${NC}
-   Config:  ${N8N_HOME}/docker-compose.yml
-   Access:  ${N8N_HOME}/ACCESS_INFO.txt
-   Logs:    docker-compose -f ${N8N_HOME}/docker-compose.yml logs -f
-
-${YELLOW}🔧 Next Steps:${NC}
-   1. Reload Caddy: ${GREEN}systemctl reload caddy${NC}
-   2. Access dashboard: ${GREEN}https://${DOMAIN}/n8n/${NC}
-   3. Setup workflows: ${GREEN}make youtube-workflow${NC}
-   4. View documentation: ${GREEN}cat ${N8N_HOME}/ACCESS_INFO.txt${NC}
+${YELLOW}📚 Next Steps:${NC}
+   1. Access n8n: ${GREEN}http://localhost:${N8N_PORT}${NC}
+   2. Install YouTube workflow: ${GREEN}make setup-youtube-workflow${NC}
+   3. Configure API keys in n8n interface
 
 ${YELLOW}⚠️  Important:${NC}
-   - Save your password: ${GREEN}${N8N_PASSWORD}${NC}
-   - Stored securely in: ${N8N_HOME}/ACCESS_INFO.txt
-   - Only accessible via HTTPS (auto-configured)
+   - Password saved in: ${GREEN}${N8N_HOME}/ACCESS_INFO.txt${NC}
+   - Keep credentials secure
+   - Backup workflows regularly
 
-${YELLOW}📖 Monitoring:${NC}
-   Consul UI:  http://${PRIVATE_IP}:8500 (check n8n service)
-   Dashboard:  http://${PRIVATE_IP}:9000 (Nexus monitoring)
-   n8n Status: ${GREEN}systemctl status n8n-automation${NC}
-
-═══════════════════════════════════════════════════════════
-Ready for workflow automation! 🚀
 ═══════════════════════════════════════════════════════════
 
 EOF
+    
+    log "Installation completed successfully!"
+}
 
-echo "Installation completed at $(date)" >> "${N8N_HOME}/install.log"
-
-log "n8n installation complete!"
-log "Next: Run 'make youtube-workflow' to setup YouTube Shorts automation"
+main "$@"
