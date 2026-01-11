@@ -4,6 +4,12 @@
 
 set -e
 
+# Fix terminal type issues
+export TERM="${TERM:-xterm}"
+if ! tput colors &>/dev/null; then
+    export TERM=xterm
+fi
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -27,7 +33,7 @@ warning() {
 }
 
 banner() {
-    clear
+    clear 2>/dev/null || echo -e "\n\n"
     cat << "EOF"
 ╔═══════════════════════════════════════════════════════════╗
 ║                                                           ║

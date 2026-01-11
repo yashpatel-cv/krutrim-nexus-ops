@@ -6,6 +6,12 @@
 
 set -e
 
+# Fix terminal type issues
+export TERM="${TERM:-xterm}"
+if ! tput colors &>/dev/null; then
+    export TERM=xterm
+fi
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -19,7 +25,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(dirname "$SCRIPT_DIR")"
 
 # Banner
-clear
+clear 2>/dev/null || echo -e "\n\n"
 cat << "EOF"
 ╔═══════════════════════════════════════════════════════╗
 ║                                                       ║

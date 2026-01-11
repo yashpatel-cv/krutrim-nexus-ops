@@ -258,6 +258,22 @@ Automated AI-powered YouTube Shorts generation using n8n workflow automation.
 
 ### Quick Setup
 
+**Option 1: Using install.sh (Recommended)**
+
+```bash
+# Run installer and select option 5 for n8n, then option 6 for YouTube
+sudo ./install.sh
+
+# Or use directly:
+sudo ./install.sh --role n8n
+sudo ./install.sh --role youtube
+
+# Access credentials
+cat /opt/n8n-automation/ACCESS_INFO.txt
+```
+
+**Option 2: Using Makefile**
+
 ```bash
 # 1. Install n8n automation platform
 make setup-n8n
@@ -266,7 +282,7 @@ make setup-n8n
 make setup-youtube
 
 # 3. Access n8n and configure API keys
-# See credentials in: /opt/n8n-automation/ACCESS_INFO.txt
+cat /opt/n8n-automation/ACCESS_INFO.txt
 ```
 
 ### Features

@@ -255,12 +255,18 @@ if [ -z "${1:-}" ]; then
     echo "  3) Both            (Manager + Worker on same machine - Oracle setup)"
     echo "  4) Load Balancer   (Caddy reverse proxy)"
     echo ""
-    read -p "Select [1/2/3/4]: " choice
+    echo -e "${YELLOW}YouTube Shorts Automation:${NC}"
+    echo "  5) Setup n8n       (Workflow automation platform)"
+    echo "  6) YouTube Shorts  (AI video generation workflow)"
+    echo ""
+    read -p "Select [1/2/3/4/5/6]: " choice
     case "$choice" in
         1) ROLE="manager" ;;
         2) ROLE="worker" ;;
         3) ROLE="both" ;;
         4) ROLE="loadbalancer" ;;
+        5) ROLE="n8n" ;;
+        6) ROLE="youtube" ;;
         *) err "Invalid choice." ;;
     esac
 else
@@ -1197,6 +1203,58 @@ validate_installation() {
     fi
 }
 
+# --- n8n Setup ---
+setup_n8n() {
+    log "Setting up n8n automation platform..."
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    
+    if [ ! -f "$SCRIPT_DIR/scripts/setup-n8n.sh" ]; then
+        err "setup-n8n.sh not found in $SCRIPT_DIR/scripts/"
+        exit 1
+    fi
+    
+    chmod +x "$SCRIPT_DIR/scripts/setup-n8n.sh"
+    "$SCRIPT_DIR/scripts/setup-n8n.sh"
+    
+    echo ""
+    echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"
+    echo -e "${GREEN}✓ n8n setup complete!${NC}"
+    echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"
+    echo ""
+    echo -e "${YELLOW}Next steps:${NC}"
+    echo -e "  1. Setup YouTube workflow: ${GREEN}sudo ./install.sh --role youtube${NC}"
+    echo -e "  2. Access n8n: Check ${GREEN}/opt/n8n-automation/ACCESS_INFO.txt${NC}"
+    echo ""
+    exit 0
+}
+
+# --- YouTube Workflow Setup ---
+setup_youtube() {
+    log "Setting up YouTube Shorts workflow..."
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    
+    if [ ! -f "$SCRIPT_DIR/scripts/setup-youtube-workflow.sh" ]; then
+        err "setup-youtube-workflow.sh not found in $SCRIPT_DIR/scripts/"
+        exit 1
+    fi
+    
+    # Check if n8n is installed
+    if [ ! -d "/opt/n8n-automation" ]; then
+        err "n8n not installed. Run: sudo ./install.sh --role n8n first"
+        exit 1
+    fi
+    
+    chmod +x "$SCRIPT_DIR/scripts/setup-youtube-workflow.sh"
+    "$SCRIPT_DIR/scripts/setup-youtube-workflow.sh"
+    
+    echo ""
+    echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"
+    echo -e "${GREEN}✓ YouTube Shorts workflow setup complete!${NC}"
+    echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"
+    echo ""
+    exit 0
+}
+
 # --- Execution ---
 case "$ROLE" in
     manager)
@@ -1210,6 +1268,12 @@ case "$ROLE" in
         ;;
     loadbalancer)
         setup_loadbalancer
+        ;;
+    n8n)
+        setup_n8n
+        ;;
+    youtube)
+        setup_youtube
         ;;
     *)
         err "Unknown role: $ROLE"
