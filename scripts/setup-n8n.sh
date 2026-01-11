@@ -125,7 +125,7 @@ services:
     container_name: n8n-shorts-automation
     restart: unless-stopped
     ports:
-      - "127.0.0.1:${N8N_PORT}:5678"
+      - "${N8N_PORT}:5678"
     environment:
       - N8N_HOST=\${N8N_HOST:-localhost}
       - N8N_PORT=5678
