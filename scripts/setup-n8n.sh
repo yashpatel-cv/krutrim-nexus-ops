@@ -37,10 +37,19 @@ EOF
 
 echo ""
 
-# Check if running as root
-if [ "$EUID" -eq 0 ]; then 
-    echo -e "${RED}✗${NC} Please run as non-root user (script will use sudo when needed)"
-    exit 1
+# Detect if running as root - adjust sudo usage accordingly
+if [ "$EUID" -eq 0 ]; then
+    # Running as root (e.g., via sudo ./install.sh)
+    SUDO=""
+    # Try to get the actual user who called sudo
+    if [ -n "$SUDO_USER" ]; then
+        ACTUAL_USER="$SUDO_USER"
+    else
+        ACTUAL_USER="root"
+    fi
+else
+    SUDO="sudo"
+    ACTUAL_USER="$USER"
 fi
 
 # Step 1: Pre-flight checks
@@ -60,9 +69,9 @@ if ! command -v docker-compose &> /dev/null; then
     else
         COMPOSE_ARCH="x86_64"
     fi
-    sudo curl -sL "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-${COMPOSE_ARCH}" \
+    $SUDO curl -sL "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-${COMPOSE_ARCH}" \
         -o /usr/local/bin/docker-compose
-    sudo chmod +x /usr/local/bin/docker-compose
+    $SUDO chmod +x /usr/local/bin/docker-compose
     echo -e "${GREEN}✓${NC} Docker Compose installed"
 else
     echo -e "${GREEN}✓${NC} Docker Compose found"
@@ -71,7 +80,7 @@ fi
 # Step 2: Find available port
 echo -e "\n${BLUE}[2/12]${NC} Finding available port..."
 
-EXISTING_PORTS=$(sudo ss -tulpn 2>/dev/null | grep LISTEN | awk '{print $5}' | grep -oE '[0-9]+$' | sort -u)
+EXISTING_PORTS=$($SUDO ss -tulpn 2>/dev/null | grep LISTEN | awk '{print $5}' | grep -oE '[0-9]+$' | sort -u)
 N8N_PORT=""
 
 for PORT in 5678 5679 8080 8081 3000 3001 8888; do
@@ -91,8 +100,8 @@ echo -e "${GREEN}✓${NC} Using port: $N8N_PORT"
 # Step 3: Create directory structure
 echo -e "\n${BLUE}[3/12]${NC} Creating directory structure..."
 
-sudo mkdir -p "$N8N_HOME"/{workflows,backups,data,credentials,logs}
-sudo chown -R "$USER":"$USER" "$N8N_HOME"
+$SUDO mkdir -p "$N8N_HOME"/{workflows,backups,data,credentials,logs}
+$SUDO chown -R "$ACTUAL_USER":"$ACTUAL_USER" "$N8N_HOME"
 
 echo -e "${GREEN}✓${NC} Directories created: $N8N_HOME"
 
@@ -194,9 +203,9 @@ fi
 echo -e "\n${BLUE}[8/12]${NC} Creating Caddy reverse proxy config..."
 
 if [ -d "/etc/caddy" ]; then
-    sudo mkdir -p /etc/caddy/conf.d/
+    $SUDO mkdir -p /etc/caddy/conf.d/
     
-    sudo tee /etc/caddy/conf.d/n8n.caddy > /dev/null <<EOF
+    $SUDO tee /etc/caddy/conf.d/n8n.caddy > /dev/null <<EOF
 # n8n Automation Platform
 # Uncomment and configure domain below if using HTTPS
 
@@ -278,7 +287,7 @@ fi
 # Step 11: Create systemd service
 echo -e "\n${BLUE}[11/12]${NC} Creating systemd service..."
 
-sudo tee /etc/systemd/system/n8n-automation.service > /dev/null <<EOF
+$SUDO tee /etc/systemd/system/n8n-automation.service > /dev/null <<EOF
 [Unit]
 Description=n8n YouTube Shorts Automation
 Documentation=https://docs.n8n.io
@@ -292,8 +301,8 @@ WorkingDirectory=${N8N_HOME}
 ExecStart=/bin/bash -c 'docker compose up -d 2>/dev/null || docker-compose up -d'
 ExecStop=/bin/bash -c 'docker compose down 2>/dev/null || docker-compose down'
 ExecReload=/bin/bash -c 'docker compose restart 2>/dev/null || docker-compose restart'
-User=${USER}
-Group=${USER}
+User=${ACTUAL_USER}
+Group=${ACTUAL_USER}
 
 # Security hardening
 NoNewPrivileges=true
@@ -306,8 +315,8 @@ ReadWritePaths=${N8N_HOME}
 WantedBy=multi-user.target
 EOF
 
-sudo systemctl daemon-reload
-sudo systemctl enable n8n-automation.service
+$SUDO systemctl daemon-reload
+$SUDO systemctl enable n8n-automation.service
 
 echo -e "${GREEN}✓${NC} Systemd service created and enabled"
 
@@ -428,4 +437,4 @@ EOF
 # Log installation
 echo "n8n installation completed at $(date)" >> "$N8N_HOME/install.log"
 echo "Port: $N8N_PORT" >> "$N8N_HOME/install.log"
-echo "User: $USER" >> "$N8N_HOME/install.log"
+echo "User: $ACTUAL_USER" >> "$N8N_HOME/install.log"
