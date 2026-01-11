@@ -243,9 +243,7 @@ prevalidate_environment() {
     fi
 }
 
-prevalidate_environment
-
-# --- Interactive Role Selection ---
+# --- Interactive Role Selection (Before Environment Validation) ---
 ROLE=""
 if [ -z "${1:-}" ]; then
     echo ""
@@ -276,6 +274,11 @@ else
 fi
 
 log "Deployment mode: ${ROLE}"
+
+# Skip environment validation for n8n/youtube roles
+if [[ "$ROLE" != "n8n" && "$ROLE" != "youtube" ]]; then
+    prevalidate_environment
+fi
 
 # --- Common Dependencies ---
 install_base_deps() {
