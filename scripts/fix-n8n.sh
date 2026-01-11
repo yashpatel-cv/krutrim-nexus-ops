@@ -48,11 +48,14 @@ if command -v netfilter-persistent &> /dev/null; then
     sudo netfilter-persistent save
     echo -e "${GREEN}✓${NC} Firewall configured (persistent)"
 elif command -v iptables-save &> /dev/null; then
-    sudo sh -c "iptables-save > /etc/iptables/rules.v4"
-    echo -e "${GREEN}✓${NC} Firewall configured"
+    sudo mkdir -p /etc/iptables 2>/dev/null || true
+    sudo sh -c "iptables-save > /etc/iptables/rules.v4" 2>/dev/null || true
+    echo -e "${GREEN}✓${NC} Firewall configured (OS-level)"
 else
-    echo -e "${YELLOW}⚠${NC} Firewall configured (non-persistent)"
+    echo -e "${YELLOW}⚠${NC} iptables rule added (non-persistent)"
 fi
+
+echo -e "${YELLOW}⚠${NC} Oracle Cloud: You MUST also add port 5678 in Cloud Console Security Lists"
 
 # 4. Stop any existing containers
 echo -e "\n${BLUE}[4/6]${NC} Stopping existing containers..."
