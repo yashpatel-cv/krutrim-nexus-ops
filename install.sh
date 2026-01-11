@@ -21,6 +21,90 @@ log() { echo -e "${GREEN}[$(date +'%H:%M:%S')]${NC} $*"; }
 warn() { echo -e "${YELLOW}[WARNING]${NC} $*"; }
 err() { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
 
+# ============================================================
+# MENU FIRST - Show options before any system changes
+# ============================================================
+
+show_banner() {
+    echo -e "${BLUE}"
+    cat << 'BANNER'
+╔══════════════════════════════════════════════════════════════╗
+║                                                              ║
+║            Krutrim Nexus Ops - Installation Menu             ║
+║                                                              ║
+╚══════════════════════════════════════════════════════════════╝
+BANNER
+    echo -e "${NC}"
+}
+
+# --- Role Selection (FIRST - before any system changes) ---
+ROLE=""
+if [[ "${1:-}" == "--role" && -n "${2:-}" ]]; then
+    ROLE="$2"
+else
+    show_banner
+    echo -e "${YELLOW}Infrastructure Setup:${NC}"
+    echo "  1) Manager Only    (Control plane, orchestration)"
+    echo "  2) Worker Only     (Execution node)"
+    echo "  3) Both            (Manager + Worker on same machine)"
+    echo "  4) Load Balancer   (Caddy reverse proxy)"
+    echo ""
+    echo -e "${YELLOW}YouTube Shorts Automation:${NC}"
+    echo "  5) Setup n8n       (Workflow automation platform)"
+    echo "  6) YouTube Shorts  (AI video generation workflow)"
+    echo ""
+    read -p "Select [1/2/3/4/5/6]: " choice
+    case "$choice" in
+        1) ROLE="manager" ;;
+        2) ROLE="worker" ;;
+        3) ROLE="both" ;;
+        4) ROLE="loadbalancer" ;;
+        5) ROLE="n8n" ;;
+        6) ROLE="youtube" ;;
+        *) err "Invalid choice." ;;
+    esac
+fi
+
+log "Selected: ${ROLE}"
+
+# ============================================================
+# n8n and YouTube - Skip infrastructure setup entirely
+# ============================================================
+
+if [ "$ROLE" == "n8n" ]; then
+    log "Setting up n8n automation platform..."
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    
+    if [ ! -f "$SCRIPT_DIR/scripts/setup-n8n.sh" ]; then
+        err "setup-n8n.sh not found in $SCRIPT_DIR/scripts/"
+    fi
+    
+    chmod +x "$SCRIPT_DIR/scripts/setup-n8n.sh"
+    exec "$SCRIPT_DIR/scripts/setup-n8n.sh"
+fi
+
+if [ "$ROLE" == "youtube" ]; then
+    log "Setting up YouTube Shorts workflow..."
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    
+    if [ ! -d "/opt/n8n-automation" ]; then
+        err "n8n not installed. Run: sudo ./install.sh --role n8n first"
+    fi
+    
+    if [ ! -f "$SCRIPT_DIR/scripts/setup-youtube-workflow.sh" ]; then
+        err "setup-youtube-workflow.sh not found in $SCRIPT_DIR/scripts/"
+    fi
+    
+    chmod +x "$SCRIPT_DIR/scripts/setup-youtube-workflow.sh"
+    exec "$SCRIPT_DIR/scripts/setup-youtube-workflow.sh"
+fi
+
+# ============================================================
+# Infrastructure roles only - Environment Detection starts here
+# ============================================================
+
+log "Starting infrastructure setup for role: $ROLE"
+
 # --- Dynamic Environment Detection ---
 # Auto-detect private IP (works on ARM64 and AMD64)
 PRIVATE_IP="$(hostname -I | awk '{print $1}')"
@@ -243,42 +327,8 @@ prevalidate_environment() {
     fi
 }
 
-# --- Interactive Role Selection (Before Environment Validation) ---
-ROLE=""
-if [ -z "${1:-}" ]; then
-    echo ""
-    echo -e "${YELLOW}Select deployment mode:${NC}"
-    echo "  1) Manager Only    (Control plane, orchestration)"
-    echo "  2) Worker Only     (Execution node)"
-    echo "  3) Both            (Manager + Worker on same machine - Oracle setup)"
-    echo "  4) Load Balancer   (Caddy reverse proxy)"
-    echo ""
-    echo -e "${YELLOW}YouTube Shorts Automation:${NC}"
-    echo "  5) Setup n8n       (Workflow automation platform)"
-    echo "  6) YouTube Shorts  (AI video generation workflow)"
-    echo ""
-    read -p "Select [1/2/3/4/5/6]: " choice
-    case "$choice" in
-        1) ROLE="manager" ;;
-        2) ROLE="worker" ;;
-        3) ROLE="both" ;;
-        4) ROLE="loadbalancer" ;;
-        5) ROLE="n8n" ;;
-        6) ROLE="youtube" ;;
-        *) err "Invalid choice." ;;
-    esac
-else
-    if [[ "$1" == "--role" && -n "${2:-}" ]]; then
-        ROLE="$2"
-    fi
-fi
-
-log "Deployment mode: ${ROLE}"
-
-# Skip environment validation for n8n/youtube roles
-if [[ "$ROLE" != "n8n" && "$ROLE" != "youtube" ]]; then
-    prevalidate_environment
-fi
+# Run pre-flight validation for infrastructure roles
+prevalidate_environment
 
 # --- Common Dependencies ---
 install_base_deps() {
@@ -1206,59 +1256,7 @@ validate_installation() {
     fi
 }
 
-# --- n8n Setup ---
-setup_n8n() {
-    log "Setting up n8n automation platform..."
-    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    
-    if [ ! -f "$SCRIPT_DIR/scripts/setup-n8n.sh" ]; then
-        err "setup-n8n.sh not found in $SCRIPT_DIR/scripts/"
-        exit 1
-    fi
-    
-    chmod +x "$SCRIPT_DIR/scripts/setup-n8n.sh"
-    "$SCRIPT_DIR/scripts/setup-n8n.sh"
-    
-    echo ""
-    echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"
-    echo -e "${GREEN}✓ n8n setup complete!${NC}"
-    echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"
-    echo ""
-    echo -e "${YELLOW}Next steps:${NC}"
-    echo -e "  1. Setup YouTube workflow: ${GREEN}sudo ./install.sh --role youtube${NC}"
-    echo -e "  2. Access n8n: Check ${GREEN}/opt/n8n-automation/ACCESS_INFO.txt${NC}"
-    echo ""
-    exit 0
-}
-
-# --- YouTube Workflow Setup ---
-setup_youtube() {
-    log "Setting up YouTube Shorts workflow..."
-    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    
-    if [ ! -f "$SCRIPT_DIR/scripts/setup-youtube-workflow.sh" ]; then
-        err "setup-youtube-workflow.sh not found in $SCRIPT_DIR/scripts/"
-        exit 1
-    fi
-    
-    # Check if n8n is installed
-    if [ ! -d "/opt/n8n-automation" ]; then
-        err "n8n not installed. Run: sudo ./install.sh --role n8n first"
-        exit 1
-    fi
-    
-    chmod +x "$SCRIPT_DIR/scripts/setup-youtube-workflow.sh"
-    "$SCRIPT_DIR/scripts/setup-youtube-workflow.sh"
-    
-    echo ""
-    echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"
-    echo -e "${GREEN}✓ YouTube Shorts workflow setup complete!${NC}"
-    echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"
-    echo ""
-    exit 0
-}
-
-# --- Execution ---
+# --- Execution (n8n/youtube handled at script start via exec) ---
 case "$ROLE" in
     manager)
         setup_manager
@@ -1271,12 +1269,6 @@ case "$ROLE" in
         ;;
     loadbalancer)
         setup_loadbalancer
-        ;;
-    n8n)
-        setup_n8n
-        ;;
-    youtube)
-        setup_youtube
         ;;
     *)
         err "Unknown role: $ROLE"
