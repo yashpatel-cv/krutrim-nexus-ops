@@ -252,6 +252,43 @@ docker run -d --restart unless-stopped \
 
 ---
 
+## 🎬 YouTube Shorts Automation (NEW!)
+
+Automated AI-powered YouTube Shorts generation using n8n workflow automation.
+
+### Quick Setup
+
+```bash
+# 1. Install n8n automation platform
+make setup-n8n
+
+# 2. Setup YouTube Shorts workflow
+make setup-youtube
+
+# 3. Access n8n and configure API keys
+# See credentials in: /opt/n8n-automation/ACCESS_INFO.txt
+```
+
+### Features
+
+- ✅ **Fully automated** - No manual intervention after setup
+- ✅ **Multi-agent AI** - Script generation, voice, stock footage
+- ✅ **Free tier** - $0/month using Groq, Pexels, Crikk
+- ✅ **Scalable** - 4-8 videos/day on free tier
+- ✅ **Monitored** - Consul health checks integration
+
+### Free APIs Used
+
+| Service | Purpose | Limit |
+|---------|---------|-------|
+| Groq AI | Script generation | 14,400 req/day |
+| Pexels | Stock videos | Unlimited |
+| Crikk TTS | Voice generation | Unlimited |
+
+**Full Guide**: See [docs/YOUTUBE_SHORTS_GUIDE.md](docs/YOUTUBE_SHORTS_GUIDE.md)
+
+---
+
 ## ❓ FAQ
 
 **Q: What happens if a worker dies?**  

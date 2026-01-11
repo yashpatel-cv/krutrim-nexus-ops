@@ -65,7 +65,7 @@ fi
 # Step 2: Find available port
 echo -e "\n${BLUE}[2/12]${NC} Finding available port..."
 
-EXISTING_PORTS=$(sudo ss -tulpn 2>/dev/null | grep LISTEN | awk '{print $5}' | cut -d: -f2 | sort -u)
+EXISTING_PORTS=$(sudo ss -tulpn 2>/dev/null | grep LISTEN | awk '{print $5}' | grep -oE '[0-9]+$' | sort -u)
 N8N_PORT=""
 
 for PORT in 5678 5679 8080 8081 3000 3001 8888; do
@@ -86,7 +86,7 @@ echo -e "${GREEN}✓${NC} Using port: $N8N_PORT"
 echo -e "\n${BLUE}[3/12]${NC} Creating directory structure..."
 
 sudo mkdir -p "$N8N_HOME"/{workflows,backups,data,credentials,logs}
-sudo chown -R $USER:$USER "$N8N_HOME"
+sudo chown -R "$USER":"$USER" "$N8N_HOME"
 
 echo -e "${GREEN}✓${NC} Directories created: $N8N_HOME"
 
@@ -216,14 +216,25 @@ fi
 echo -e "\n${BLUE}[9/12]${NC} Starting n8n container..."
 
 cd "$N8N_HOME"
-docker-compose up -d
+
+# Use docker-compose or docker compose (plugin)
+if command -v docker-compose &> /dev/null; then
+    COMPOSE_CMD="docker-compose"
+elif docker compose version &> /dev/null 2>&1; then
+    COMPOSE_CMD="docker compose"
+else
+    echo -e "${RED}✗${NC} Neither docker-compose nor docker compose found"
+    exit 1
+fi
+
+$COMPOSE_CMD up -d
 
 echo -e "${GREEN}✓${NC} Container started"
 
 # Wait for n8n to be ready
 echo -e "${YELLOW}⏳${NC} Waiting for n8n to initialize..."
-for i in {1..30}; do
-    if curl -s http://localhost:${N8N_PORT}/healthz > /dev/null 2>&1; then
+for _ in {1..30}; do
+    if curl -s "http://localhost:${N8N_PORT}/healthz" > /dev/null 2>&1; then
         echo -e "${GREEN}✓${NC} n8n is ready!"
         break
     fi
@@ -272,13 +283,11 @@ Requires=docker.service
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=${N8N_HOME}
-ExecStart=/usr/local/bin/docker-compose up -d
-ExecStop=/usr/local/bin/docker-compose down
-ExecReload=/usr/local/bin/docker-compose restart
-Restart=on-failure
-RestartSec=30s
-User=$USER
-Group=$USER
+ExecStart=/bin/bash -c 'docker compose up -d 2>/dev/null || docker-compose up -d'
+ExecStop=/bin/bash -c 'docker compose down 2>/dev/null || docker-compose down'
+ExecReload=/bin/bash -c 'docker compose restart 2>/dev/null || docker-compose restart'
+User=${USER}
+Group=${USER}
 
 # Security hardening
 NoNewPrivileges=true
@@ -388,7 +397,7 @@ ${YELLOW}📁 Installation:${NC}
 
 ${YELLOW}🔧 Management:${NC}
    Status:    ${GREEN}sudo systemctl status n8n-automation${NC}
-   Logs:      ${GREEN}docker-compose -f ${N8N_HOME}/docker-compose.yml logs -f${NC}
+   Logs:      ${GREEN}cd ${N8N_HOME} && docker compose logs -f${NC}
    Restart:   ${GREEN}sudo systemctl restart n8n-automation${NC}
 
 ${YELLOW}🎬 Next Steps:${NC}

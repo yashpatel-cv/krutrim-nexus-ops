@@ -39,11 +39,27 @@ EOF
 }
 
 check_n8n() {
-    if ! docker ps | grep -q "n8n-automation"; then
+    # Check if docker is available
+    if ! command -v docker &> /dev/null; then
+        error "Docker not found. Please install Docker first."
+        exit 1
+    fi
+    
+    # Check if n8n container is running
+    if ! docker ps --format '{{.Names}}' | grep -q "n8n-shorts-automation"; then
         error "n8n is not running. Install first: make setup-n8n"
         exit 1
     fi
     log "n8n is running"
+}
+
+check_directories() {
+    # Check if n8n home exists
+    if [ ! -d "$N8N_HOME" ]; then
+        error "n8n not installed. Directory $N8N_HOME not found."
+        error "Run 'make setup-n8n' first."
+        exit 1
+    fi
 }
 
 main() {
@@ -63,10 +79,15 @@ main() {
     fi
     
     log "Step 1/5: Checking n8n installation..."
+    check_directories
     check_n8n
     
     log "Step 2/5: Creating workflow directory..."
-    mkdir -p "$WORKFLOW_DIR"
+    if ! mkdir -p "$WORKFLOW_DIR" 2>/dev/null; then
+        # Try with sudo if permission denied
+        sudo mkdir -p "$WORKFLOW_DIR"
+        sudo chown "$USER":"$USER" "$WORKFLOW_DIR"
+    fi
     
     log "Step 3/5: Generating workflow JSON..."
     
@@ -334,7 +355,7 @@ See: `/opt/n8n-automation/API_KEYS_REQUIRED.txt`
 
 ```bash
 # View workflow executions
-docker-compose -f /opt/n8n-automation/docker-compose.yml logs -f
+cd /opt/n8n-automation && docker compose logs -f
 
 # Check Consul health
 curl http://localhost:8500/v1/catalog/service/n8n
